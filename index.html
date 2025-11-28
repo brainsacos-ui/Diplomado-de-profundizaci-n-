@@ -1,167 +1,275 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Buscador de Preguntas Linux</title>
-    <style>
-        body {
-            font-family: Arial;
-            background: #0f172a;
-            color: white;
-            text-align: center;
-            padding: 40px;
-        }
-        input, button {
-            padding: 10px;
-            width: 80%;
-            margin: 10px auto;
-            font-size: 16px;
-        }
-        #respuesta {
-            margin-top: 20px;
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 10px;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buscador de Preguntas Linux - Respuesta Única</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; background:#f6f8fa; margin:0; padding:20px; color:#111; }
+    .container { max-width:900px; margin:24px auto; background:#fff; padding:24px; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.08); }
+    h1 { margin-top:0; }
+    .controls { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+    input[type="text"] { flex:1; padding:10px 12px; font-size:16px; border:1px solid #ccd; border-radius:6px; }
+    button { padding:10px 14px; font-size:15px; border-radius:6px; border:0; cursor:pointer; background:#0366d6; color:#fff; }
+    button.secondary { background:#6a737d; }
+    .result { margin-top:16px; padding:14px; border-radius:6px; background:#f1f8ff; border:1px solid #dbeeff; }
+    .hint { font-size:13px; color:#555; margin-top:8px; }
+    .score { font-size:12px; color:#333; opacity:0.7; margin-top:6px; }
+    .no-speech { color:#b03a2e; }
+    footer { margin-top:18px; font-size:13px; color:#666; }
+    .mic { display:inline-flex; align-items:center; gap:8px; }
+  </style>
 </head>
 <body>
+  <div class="container">
+    <h1>Buscador de Preguntas Linux — Respuesta única</h1>
+    <p>Escribe o presiona el micrófono para preguntar (respuestas únicas y verdaderas según la base incluida).</p>
 
-<h1>Buscador de Preguntas Linux</h1>
+    <div class="controls">
+      <input id="query" type="text" placeholder="Escribe tu pregunta (por ejemplo: '¿Cuál es el comando para copiar un archivo?')" />
+      <button id="btnSearch">Buscar</button>
+      <button id="btnMic" class="secondary">🎤 Usar voz</button>
+    </div>
 
-<input type="text" id="pregunta" placeholder="Escribe o habla tu pregunta...">
-<button onclick="buscar()">Buscar</button>
-<button onclick="hablar()">🎤 Voz</button>
+    <div id="result" class="result" aria-live="polite">Ingresa una pregunta o usa la voz y pulsa Buscar.</div>
+    <div id="score" class="score"></div>
+    <div id="hint" class="hint">El buscador hace coincidencia por palabras y devuelve una sola respuesta considerada correcta.</div>
 
-<div id="respuesta"></div>
+    <footer>
+      Puedes usar esto como página estática en GitHub Pages (sube index.html a la rama gh-pages o a main/docs). También incluyo un ejemplo en C# (API) en README si prefieres backend.
+    </footer>
+  </div>
 
-<script>
-const preguntas = {
-"¿Cuál es la diferencia entre ls, ls -l y ls -a?": "ls lista archivos, ls -l muestra detalles y ls -a incluye archivos ocultos.",
-"¿Para qué sirve el comando pwd?": "Muestra la ruta del directorio actual.",
-"¿cual es el demonio que gestiona los servicios de Linux?": "Systemd",
-"¿Cual es el comando utilizado para mostrar el directorio de trabajo actual en la terminal de Linux?": "pwd",
-"¿cual es el comando utilizado para enumerar los archivos en un directorio en Linux?": "ls",
-"¿Cuál es el comando para mostrar información de uso de memoria en Linux?": "free",
-"¿cual es el comando para iniciar un servicio en Linux usando systemd?": "systemctl start nombre-del-servicio",
-"¿cual es el comando para enumerar todos los grupos en Linux?": "cat /etc/group",
-"¿cual es el comando para detener un servicio en Linux usando systemd?": "systemctl stop nombre-del-servicio",
-"¿Cuál es el demonio responsable de montar dispositivos automáticamente en Linux?": "autofs",
-"¿cual es la base de la filosofía del software libre de Linux?": "Compartir y colaborar",
-"¿cual es el comando para mover un archivo a otro directorio en Linux?": "mv",
-"¿cual es el archivo que almacena las contraseñas de los usuarios en Linux?": "/etc/shadow",
-"¿cual es el comando para copiar un archivo en Linux?": "cp",
-"¿cual es el comando para crear un nuevo directorio en Linux?": "mkdir",
-"¿cual es el comando para eliminar un archivo en Linux?": "rm",
-"¿cual es el comando para mostrar los procesos en Linux?": "ps",
-"¿cual es el comando para instalar un paquete con dpkg?": "dpkg -i",
-"¿cual es el comando para mostrar espacio en disco?": "df -h",
-"¿Qué es el kernel?": "Núcleo del sistema operativo"
-};
+  <script>
+    // Base de datos de preguntas y respuestas (cada pregunta tiene una única respuesta "verdadera")
+    const QA = [
+      { q: "¿Cuál es la diferencia entre ls, ls -l y ls -a?", a: "ls lista archivos, ls -l muestra detalles y ls -a incluye archivos ocultos." },
+      { q: "¿Para qué sirve el comando pwd?", a: "Muestra la ruta del directorio actual." },
 
-function buscar() {
-    const texto = document.getElementById("pregunta").value.trim();
-    const respuesta = preguntas[texto];
+      { q: "¿cual es el demonio que gestiona los servicios de Linux?", a: "systemd" },
+      { q: "¿Cual es el comando utilizado para mostrar el directorio de trabajo actual en la terminal de Linux?", a: "pwd" },
+      { q: "¿cual es el comando utilizado para enumerar los archivos en un directorio en Linux?", a: "ls" },
+      { q: "¿Cuál es el comando para mostrar información de uso de memoria en Linux?", a: "free" },
+      { q: "¿cual es el comando para iniciar un servicio en Linux usando systemd?", a: "systemctl start <nombre-del-servicio>" },
+      { q: "¿cual es el comando para enumerar todos los grupos en Linux?", a: "cat /etc/group" },
+      { q: "¿cual es el comando para detener un servicio en Linux usando systemd?", a: "systemctl stop <nombre-del-servicio>" },
+      { q: "¿Cual es el demonio responsable de montar dispositivos automáticamente en Linux?", a: "autofs" },
+      { q: "¿cual es la base de la filosofía del software libre de Linux?", a: "Compartir y colaborar" },
+      { q: "Cual es el comando para mover un archivo a otro directorio en Linux?", a: "mv" },
+      { q: "¿cual es el archivo que contiene la configuración de resolución de pantalla en Linux?", a: "/etc/X11/xorg.conf" },
+      { q: "¿cual es el archivo que almacena las contraseñas de los usuarios en Linux?", a: "/etc/shadow" },
+      { q: "¿cual es el comando para copiar un archivo en Linux?", a: "cp" },
+      { q: "¿cual es el archivo que contiene la configuración del entorno global para todos los usuarios?", a: "/etc/profile" },
+      { q: "¿cual es el comando para enumerar todos los procesos que se ejecutan en el sistema en Linux?", a: "ps" },
+      { q: "¿Cual es el archivo o ruta que contiene información sobre dispositivos de hardware en Linux?", a: "/sys/devices" },
+      { q: "¿cual es el comando para cambiar el directorio actual a un directorio especifico en Linux?", a: "cd" },
+      { q: "¿cual es el archivo que contiene la configuración de la impresora en Linux?", a: "/etc/cups" },
+      { q: "¿cual es el archivo que contiene la configuración de red para systemd en Linux?", a: "No existe un archivo único; la configuración de red para systemd se encuentra en /etc/systemd/network/" },
+      { q: "¿cual es el comando para mostrar información sobre dispositivos de red en Linux?", a: "ifconfig (o ip a para sistemas modernos)" },
+      { q: "¿cual es el comando para eliminar un archivo en Linux?", a: "rm" },
+      { q: "¿cual es la utilidad que se utiliza para comprimir archivos en formato .tar.gz en Linux?", a: "tar" },
+      { q: "¿cual es el comando para iniciar un programa en Linux desde la terminal?", a: "Escribir el nombre del programa" },
+      { q: "¿cual es el comando que se utiliza para cambiar los permisos de un archivo en Linux?", a: "chmod" },
+      { q: "¿cual es el archivo que contiene la información sobre los paquetes instalados en Linux (en sistemas basados en debian)?", a: "/var/lib/dpkg/status" },
+      { q: "¿cual es el comando para formatear una partición en Linux?", a: "mkfs" },
+      { q: "¿cual es el comando para crear un nuevo directorio en Linux?", a: "mkdir" },
+      { q: "¿cual es el comando que se utiliza para cambiar la contraseña de un usuario en Linux?", a: "passwd" },
+      { q: "¿cual es el comando para montar una partición en Linux?", a: "mount" },
+      { q: "¿cual es el comando para cambiar el grupo de un archivo en Linux?", a: "chgrp" },
+      { q: "¿cual es el comando para mostrar información de configuración de red en Linux?", a: "ifconfig (o ip a)" },
+      { q: "¿cual es el comando para matar un proceso especifico en Linux?", a: "kill <PID>" },
+      { q: "¿cual es el comando para cambiar el nombre de un archivo en Linux?", a: "mv" },
+      { q: "¿cuál es el comando que se utiliza para mostrar información sobre las particiones del sistema en Linux?", a: "lsblk" },
+      { q: "¿cuál es el comando para enumerar todos los archivos en un directorio y sus subcarpetas en Linux?", a: "ls -R" },
+      { q: "¿cuál es el archivo que contiene configuración de hosts en Linux?", a: "/etc/hosts" },
+      { q: "¿cuál es el comando para enumerar todos los paquetes instalados en Linux (usando dpkg)?", a: "dpkg -l" },
+      { q: "¿cómo se obtiene la información de configuración de hardware en Linux?", a: "Ejecutando el comando lshw" },
+      { q: "¿cuál es el archivo que almacena los permisos de un directorio en Linux?", a: "No existe un archivo específico; los permisos se almacenan en el sistema de archivos" },
+      { q: "¿cuál es el comando para cambiar el propietario de un archivo en Linux?", a: "chown" },
+      { q: "¿cuál es el comando para instalar un paquete de Linux usando el sistema de administración de paquetes dpkg?", a: "dpkg -i <paquete.deb>" },
+      { q: "¿cuál es el comando para enumerar los paquetes instalados en una distribución de Linux?", a: "dpkg -l (en Debian/Ubuntu)" },
+      { q: "¿cuál es el comando para agregar un usuario a un grupo de Linux?", a: "usermod -aG <grupo> <usuario>" },
+      { q: "¿cuál es el comando para mostrar información sobre la utilización de la CPU en Linux?", a: "top" },
+      { q: "¿cuál es el comando para otorgar permisos de escritura, lectura y ejecución a un archivo en Linux?", a: "chmod 777 <archivo>" },
+      { q: "¿Cuál es el comando utilizado para crear un nuevo usuario en Linux?", a: "adduser" },
 
-    document.getElementById("respuesta").innerHTML = respuesta
-        ? "✅ Respuesta correcta:<br><b>" + respuesta + "</b>"
-        : "❌ Pregunta no encontrada.";
-}
+      // Sección de preguntas frecuentes / explicación:
+      { q: "¿Cómo copiar, mover y eliminar archivos con cp, mv y rm?", a: "cp copia, mv mueve o renombra y rm elimina archivos." },
+      { q: "¿Qué hace chmod y cómo se usa en formato numérico?", a: "Cambia permisos usando números como 755 (propietario rwx, grupo rx, otros rx)." },
+      { q: "¿Para qué sirven chown y chgrp?", a: "Cambian el propietario y el grupo de un archivo." },
+      { q: "¿Qué hace el comando find?", a: "Busca archivos y directorios en el sistema." },
+      { q: "¿Para qué se utiliza grep?", a: "Busca texto dentro de archivos." },
 
-// Reconocimiento de voz
-function hablar() {
-    const rec = new webkitSpeechRecognition();
-    rec.lang = "es-ES";
-    rec.start();
+      // Administración de usuarios y grupos (resúmenes)
+      { q: "¿Cómo crear y eliminar usuarios en Linux?", a: "Con useradd para crear y userdel para eliminar (también adduser en muchas distros)." },
+      { q: "¿Diferencia entre usuario root y usuario estándar?", a: "Root tiene control total; un usuario estándar tiene permisos limitados." },
+      { q: "¿Qué archivo almacena la información de usuarios?", a: "/etc/passwd" },
+      { q: "¿Qué es la autenticación y cómo funciona en Linux?", a: "Proceso de verificación de identidad mediante usuario y contraseña." },
+      { q: "¿Qué hace el comando sudo?", a: "Ejecuta comandos con privilegios de administrador." },
 
-    rec.onresult = function(event) {
-        document.getElementById("pregunta").value = event.results[0][0].transcript;
-        buscar();
-    };
-}
-</script>
+      // Permisos y seguridad
+      { q: "Explique los permisos r, w, x.", a: "r = leer, w = escribir, x = ejecutar." },
+      { q: "¿Qué significa el permiso 755?", a: "Propietario todo (rwx), grupo y otros solo leer y ejecutar (r-x)." },
+      { q: "¿Qué diferencia hay entre permisos y propietarios?", a: "El propietario es el dueño; los permisos definen qué puede hacer cada categoría." },
+      { q: "¿Qué es SELinux o AppArmor?", a: "Sistemas de control de acceso de seguridad." },
+      { q: "¿Cómo se protege un servidor Linux?", a: "Con permisos, firewall, actualizaciones y control de usuarios." },
 
+      // Gestión de procesos
+      { q: "¿Qué hace el comando ps?", a: "Muestra los procesos en ejecución." },
+      { q: "¿Para qué sirve top o htop?", a: "Monitorean procesos en tiempo real." },
+      { q: "¿Cómo finalizar un proceso con kill?", a: "Con kill <PID>." },
+      { q: "¿Qué es un proceso zombie?", a: "Proceso terminado que aún figura en la tabla de procesos hasta que el padre lo recoja." },
+      { q: "¿Diferencia entre procesos en primer y segundo plano?", a: "Primer plano ocupa la terminal; segundo plano no." },
+
+      // Administración de paquetes
+      { q: "¿Diferencia entre apt, dnf y yum?", a: "Son gestores de paquetes para distintas distribuciones." },
+      { q: "¿Cómo instalar, actualizar y eliminar paquetes?", a: "Con apt install, apt upgrade y apt remove (u otros según la distro)." },
+      { q: "¿Qué son los repositorios?", a: "Fuentes desde donde se descargan los programas." },
+      { q: "¿Qué es un paquete .deb y un .rpm?", a: "Formatos de instalación de software (.deb para Debian/Ubuntu, .rpm para Fedora/CentOS)." },
+
+      // Arranque y servicios
+      { q: "¿Qué es el GRUB?", a: "Gestor de arranque del sistema." },
+      { q: "¿Qué es systemd?", a: "Sistema de inicio y gestión de servicios." },
+      { q: "¿Cómo iniciar, detener y reiniciar un servicio?", a: "Con systemctl start, systemctl stop y systemctl restart." },
+      { q: "¿Cómo habilitar un servicio al inicio?", a: "Con systemctl enable." },
+      { q: "¿Qué son los archivos en /etc?", a: "Archivos de configuración del sistema." },
+
+      // Redes
+      { q: "¿Cómo ver la IP del sistema?", a: "Con ip a o ifconfig." },
+      { q: "¿Qué hace ping?", a: "Verifica conectividad de red." },
+      { q: "¿Qué es DNS?", a: "Sistema que traduce nombres en direcciones IP." },
+      { q: "¿Diferencia entre IP pública y privada?", a: "La pública es visible en Internet; la privada no." },
+      { q: "¿Qué es un firewall y cómo se configura?", a: "Sistema de seguridad que controla accesos de red (ufw o firewalld)." },
+
+      // Sistemas de archivos y almacenamiento
+      { q: "¿Qué es un sistema de archivos?", a: "Método para organizar datos en un disco." },
+      { q: "Diferencias entre ext4, xfs y ntfs.", a: "ext4 y xfs son sistemas de archivos comunes en Linux; ntfs es típico de Windows." },
+      { q: "¿Qué es una partición?", a: "División lógica de un disco." },
+      { q: "¿Para qué sirve mount y umount?", a: "Conectar y desconectar sistemas de archivos." },
+      { q: "¿Qué es LVM?", a: "Gestor avanzado de volúmenes lógicos." },
+
+      // Virtualización y contenedores
+      { q: "¿Qué es la virtualización?", a: "Ejecución de varios sistemas en un solo hardware." },
+      { q: "Diferencia entre máquina virtual y contenedor.", a: "La VM simula hardware; el contenedor comparte el sistema operativo." },
+      { q: "¿Qué es Docker?", a: "Plataforma de contenedores." },
+      { q: "¿Qué es una imagen y un contenedor?", a: "La imagen es la plantilla; el contenedor es la instancia en ejecución." },
+
+      // Backups
+      { q: "¿Qué es un backup?", a: "Copia de seguridad de la información." },
+      { q: "Tipos de respaldo.", a: "Completo, incremental y diferencial." },
+      { q: "¿Qué hace rsync?", a: "Sincroniza archivos entre sistemas." },
+      { q: "¿Por qué son importantes las copias de seguridad?", a: "Previenen pérdida de información." },
+
+      // Casos prácticos
+      { q: "Un usuario no tiene acceso a una carpeta.", a: "Revisar permisos y propietario." },
+      { q: "El servidor no arranca.", a: "Revisar GRUB y logs del sistema." },
+      { q: "Un servicio web está caído.", a: "Usar systemctl status y journalctl." },
+      { q: "No hay espacio en disco.", a: "Ver con df -h y borrar archivos innecesarios." },
+
+      // Tipo certificación y comandos varios
+      { q: "¿Qué comando muestra el espacio libre en disco?", a: "df -h" },
+      { q: "¿Dónde se almacenan los logs del sistema?", a: "/var/log" },
+      { q: "¿Qué hace el comando tar?", a: "Comprime y descomprime archivos (tar, tar.gz, etc.)." },
+      { q: "¿Qué es el kernel?", a: "Núcleo del sistema operativo." }
+    ];
+
+    // Normalización simple (quita tildes, minuscula)
+    function normalize(text) {
+      return text
+        .toString()
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quitar tildes
+        .replace(/[^\w\s-?<>]/g, " ") // quitar signos raros
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    // Buscar mejor coincidencia por conteo de palabras compartidas y posiciones
+    function findBestAnswer(query) {
+      const nq = normalize(query);
+      if (!nq) return { a: "No se ingresó una pregunta.", score: 0, q: "" };
+
+      // Puntuar exact match de preguntas
+      for (const item of QA) {
+        if (normalize(item.q) === nq) {
+          return { a: item.a, score: 1.0, q: item.q };
+        }
+      }
+
+      const qWords = new Set(nq.split(" "));
+      let best = null;
+      for (const item of QA) {
+        const itemNorm = normalize(item.q);
+        const iw = itemNorm.split(" ");
+        let common = 0;
+        for (const w of iw) if (qWords.has(w)) common++;
+        // puntuación: fracción de palabras compartidas sobre pregunta objetivo
+        const score = common / Math.max(1, iw.length);
+        if (!best || score > best.score) {
+          best = { item, score };
+        }
+      }
+
+      if (!best || best.score < 0.25) {
+        return { a: "No he encontrado una respuesta segura para esa pregunta. Intenta usar palabras clave (ej: 'comando copiar archivo cp').", score: best ? best.score : 0, q: "" };
+      }
+
+      return { a: best.item.a, score: best.score, q: best.item.q };
+    }
+
+    // UI hooks
+    const input = document.getElementById("query");
+    const btnSearch = document.getElementById("btnSearch");
+    const btnMic = document.getElementById("btnMic");
+    const result = document.getElementById("result");
+    const scoreBox = document.getElementById("score");
+
+    btnSearch.addEventListener("click", () => {
+      doSearch(input.value);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doSearch(input.value);
+    });
+
+    function doSearch(text) {
+      const found = findBestAnswer(text);
+      result.innerHTML = "<strong>Pregunta encontrada:</strong> " + (found.q || "(sin coincidencia exacta)") + "<br><strong>Respuesta única:</strong> " + found.a;
+      scoreBox.textContent = "Confianza: " + (Math.round(found.score * 100)) + "%";
+    }
+
+    // Reconocimiento de voz (Web Speech API)
+    let recognition;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'es-ES';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = function(event) {
+        const text = event.results[0][0].transcript;
+        input.value = text;
+        doSearch(text);
+      };
+      recognition.onerror = function(event) {
+        result.innerHTML = "<span class='no-speech'>Error de reconocimiento: " + event.error + "</span>";
+      };
+    } else {
+      btnMic.disabled = true;
+      btnMic.title = "Reconocimiento de voz no soportado en este navegador";
+    }
+
+    btnMic.addEventListener("click", () => {
+      if (!recognition) {
+        result.innerHTML = "<span class='no-speech'>Reconocimiento de voz no soportado en este navegador.</span>";
+        return;
+      }
+      recognition.start();
+      result.textContent = "Escuchando... habla ahora.";
+    });
+
+    // Pregunta de ejemplo al cargar
+    // doSearch("¿cual es el comando para copiar un archivo en Linux?");
+  </script>
 </body>
 </html>
-using System;
-using System.Collections.Generic;
-using System.Speech.Recognition;
-
-class Program
-{
-    static Dictionary<string, string> preguntas = new Dictionary<string, string>()
-    {
-        {"ls", "Lista archivos"},
-        {"pwd", "Muestra el directorio actual"},
-        {"systemd", "Demonio que gestiona servicios"},
-        {"free", "Muestra uso de memoria"},
-        {"mv", "Mueve archivos"},
-        {"cp", "Copia archivos"},
-        {"rm", "Elimina archivos"},
-        {"mkdir", "Crea directorios"},
-        {"ps", "Muestra procesos"},
-        {"df -h", "Muestra espacio en disco"},
-        {"chmod", "Cambia permisos"},
-        {"chown", "Cambia propietario"},
-        {"tar", "Comprime archivos"},
-        {"adduser", "Crea usuarios"}
-    };
-
-    static void Main()
-    {
-        Console.WriteLine("=== BUSCADOR DE PREGUNTAS LINUX ===");
-        Console.WriteLine("1. Escribir pregunta");
-        Console.WriteLine("2. Usar voz");
-        Console.Write("Seleccione: ");
-        string opcion = Console.ReadLine();
-
-        if (opcion == "1")
-        {
-            Console.Write("Escriba su pregunta o comando: ");
-            string entrada = Console.ReadLine().ToLower();
-            Responder(entrada);
-        }
-        else if (opcion == "2")
-        {
-            ReconocerVoz();
-        }
-        else
-        {
-            Console.WriteLine("Opción inválida.");
-        }
-    }
-
-    static void Responder(string entrada)
-    {
-        foreach (var item in preguntas)
-        {
-            if (entrada.Contains(item.Key))
-            {
-                Console.WriteLine("✅ Respuesta: " + item.Value);
-                return;
-            }
-        }
-        Console.WriteLine("❌ No se encontró respuesta.");
-    }
-
-    static void ReconocerVoz()
-    {
-        SpeechRecognitionEngine recognizer = new SpeechRecognitionEngine();
-        recognizer.SetInputToDefaultAudioDevice();
-
-        GrammarBuilder gb = new GrammarBuilder();
-        gb.Append(new Choices("ls", "pwd", "systemd", "free", "mv", "cp", "rm", "mkdir", "ps", "df h", "chmod", "chown", "tar", "adduser"));
-
-        Grammar g = new Grammar(gb);
-        recognizer.LoadGrammar(g);
-
-        recognizer.SpeechRecognized += (s, e) =>
-        {
-            Console.WriteLine("Escuché: " + e.Result.Text);
-            Responder(e.Result.Text);
-        };
-
-        Console.WriteLine("🎤 Hable ahora...");
-        recognizer.Recognize();
-    }
-}
