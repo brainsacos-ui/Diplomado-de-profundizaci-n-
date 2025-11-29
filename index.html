@@ -1,290 +1,365 @@
+{
+  "name": "buscador-inteligente-diplomado-linux",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "fuse.js": "^6.6.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "typescript": "^5.1.6",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.0.0"
+  }
+}
+
 <!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Buscador Inteligente - Diplomado Linux</title>
-  <link rel="stylesheet" href="assets/style.css">
-  <!-- Fuse.js para búsqueda difusa -->
-  <script src="https://unpkg.com/fuse.js@6.6.2/dist/fuse.min.js"></script>
-</head>
-<body>
-  <main class="container">
-    <h1>Buscador Inteligente — Diplomado Linux</h1>
-    <p class="lead">Escribe o habla tu pregunta. El buscador entiende palabras clave no exactas y busca en preguntas y respuestas.</p>
-
-    <div class="search-panel">
-      <input id="query" type="text" placeholder="Escribe tu pregunta aquí..." aria-label="Buscar pregunta o tema">
-      <button id="micBtn" title="Buscar con voz">🎤</button>
-      <button id="searchBtn">🔎 Buscar</button>
-      <button id="assistBtn" class="secondary">🤖 Preguntar como asistente</button>
-    </div>
-
-    <div class="controls">
-      <label for="maxResults">Resultados:</label>
-      <input id="maxResults" type="number" min="1" max="20" value="6" />
-      <label for="threshold">Fuzziness (0-1):</label>
-      <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.35" />
-      <span id="thresholdVal">0.35</span>
-    </div>
-
-    <section id="results" aria-live="polite"></section>
-    <footer>
-      <small>Diseñado para el "Diplomado de profundización en administración de sistemas operativos Open Source con certificación en Linux".</small>
-    </footer>
-  </main>
-
-  <!-- dataset -->
-  <script src="assets/questions.js"></script>
-
-  <script>
-    // Inicialización de Fuse.js (se configura más abajo)
-    let fuse;
-    const optionsTemplate = {
-      includeScore: true,
-      shouldSort: true,
-      threshold: 0.35,
-      keys: [
-        { name: 'question', weight: 0.7 },
-        { name: 'answer', weight: 0.3 }
-      ]
-    };
-
-    function initFuse(threshold) {
-      const opts = JSON.parse(JSON.stringify(optionsTemplate));
-      opts.threshold = threshold;
-      fuse = new Fuse(QUESTIONS, opts);
-    }
-
-    // Helpers para DOM
-    const queryInput = document.getElementById('query');
-    const searchBtn = document.getElementById('searchBtn');
-    const assistBtn = document.getElementById('assistBtn');
-    const resultsEl = document.getElementById('results');
-    const micBtn = document.getElementById('micBtn');
-    const maxResultsEl = document.getElementById('maxResults');
-    const thresholdEl = document.getElementById('threshold');
-    const thresholdVal = document.getElementById('thresholdVal');
-
-    thresholdEl.addEventListener('input', () => {
-      thresholdVal.textContent = thresholdEl.value;
-      initFuse(parseFloat(thresholdEl.value));
-    });
-
-    // Inicializa fuse con el valor por defecto
-    initFuse(parseFloat(thresholdEl.value));
-
-    function highlight(text, terms) {
-      if (!terms || terms.length === 0) return escapeHtml(text);
-      // resalta ocurrencias simples de terms (array de strings)
-      let out = escapeHtml(text);
-      terms.forEach(t => {
-        if (!t) return;
-        const re = new RegExp('('+escapeRegExp(t)+')', 'ig');
-        out = out.replace(re, '<mark>$1</mark>');
-      });
-      return out;
-    }
-
-    function escapeRegExp(s) {
-      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-    function escapeHtml(unsafe) {
-      return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    function extractTermsFromQuery(q) {
-      // tokeniza por espacios y filtra palabras cortas
-      return q.split(/\s+/).filter(t => t.length>1);
-    }
-
-    function renderResults(results, query) {
-      resultsEl.innerHTML = '';
-      if (!results || results.length === 0) {
-        resultsEl.innerHTML = '<p class="no-results">No se encontraron resultados. Prueba con otras palabras clave o sube la fuzziness.</p>';
-        return;
-      }
-
-      // Construir lista ordenada por score (Fuse ya ordena)
-      const frag = document.createDocumentFragment();
-      const topHeader = document.createElement('div');
-      topHeader.className = 'results-header';
-      topHeader.innerHTML = `<strong>Resultados (${results.length})</strong> — Consulta: <em>${escapeHtml(query)}</em>`;
-      frag.appendChild(topHeader);
-
-      const terms = extractTermsFromQuery(query);
-
-      results.forEach((r, idx) => {
-        const item = r.item || r; // si es raw
-        const score = (r.score !== undefined) ? (r.score) : 0;
-        const card = document.createElement('article');
-        card.className = 'result-card';
-        card.innerHTML = `
-          <header>
-            <h3>${idx+1}. ${escapeHtml(item.question)}</h3>
-            <div class="meta">Tema: ${escapeHtml(item.topic || 'N/A')} • ID: ${escapeHtml(String(item.id || ''))} • Score: ${score.toFixed(3)}</div>
-          </header>
-          <section class="answer">
-            ${highlight(item.answer, terms)}
-          </section>
-          <footer class="result-actions">
-            <button class="copyBtn">Copiar</button>
-            <button class="viewBtn">Ver completa</button>
-          </footer>
-        `;
-        // acciones
-        card.querySelector('.copyBtn').addEventListener('click', () => {
-          navigator.clipboard.writeText(item.question + "\n\n" + item.answer);
-          alert('Copiado al portapapeles');
-        });
-        card.querySelector('.viewBtn').addEventListener('click', () => {
-          showModal(item);
-        });
-
-        frag.appendChild(card);
-      });
-
-      resultsEl.appendChild(frag);
-    }
-
-    function showModal(item) {
-      // modal simple
-      const modal = document.createElement('div');
-      modal.className = 'modal';
-      modal.innerHTML = `
-        <div class="modal-content">
-          <button class="modal-close">✖</button>
-          <h2>${escapeHtml(item.question)}</h2>
-          <pre class="modal-answer">${escapeHtml(item.answer)}</pre>
-          <p class="meta">Tema: ${escapeHtml(item.topic || 'N/A')} • ID: ${escapeHtml(String(item.id || ''))}</p>
-        </div>
-      `;
-      modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
-      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-      document.body.appendChild(modal);
-    }
-
-    function runSearch(rawQuery) {
-      const q = (rawQuery || '').trim();
-      if (!q) {
-        resultsEl.innerHTML = '<p class="no-results">Escribe o di una pregunta para buscar.</p>';
-        return;
-      }
-      const max = parseInt(maxResultsEl.value, 10) || 6;
-      const results = fuse.search(q, { limit: max });
-      renderResults(results, q);
-    }
-
-    searchBtn.addEventListener('click', () => runSearch(queryInput.value));
-    queryInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') runSearch(queryInput.value);
-    });
-
-    // Mini-asistente: junta top 3 resultados y genera una respuesta organizada y didáctica
-    assistBtn.addEventListener('click', () => {
-      const q = queryInput.value.trim();
-      if (!q) { alert('Escribe o di una pregunta primero.'); return; }
-      const max = 3;
-      const results = fuse.search(q, { limit: max });
-      if (!results || results.length === 0) {
-        resultsEl.innerHTML = '<p class="no-results">No hay información suficiente para generar una respuesta. Intenta otras palabras clave.</p>';
-        return;
-      }
-      const topItems = results.map(r => r.item);
-      // Generar respuesta simple: encabezado, resumen por puntos, fuentes
-      const summary = generateAssistantAnswer(q, topItems);
-      resultsEl.innerHTML = '';
-      const box = document.createElement('div');
-      box.className = 'assistant-box';
-      box.innerHTML = `
-        <h2>Asistente AI — Respuesta</h2>
-        <p class="asst-query">Consulta: <em>${escapeHtml(q)}</em></p>
-        <div class="asst-body">${escapeHtml(summary.text).replace(/\n/g, '<br>')}</div>
-        <h3>Fuentes y extractos</h3>
-        <ol class="asst-sources">
-          ${topItems.map(it => `<li><strong>${escapeHtml(it.question)}</strong><div class="excerpt">${escapeHtml(it.answer)}</div></li>`).join('')}
-        </ol>
-        <p class="asst-note"><em>Consejo:</em> Si necesitas más detalle de una fuente concreta, pulsa "Ver completa" en los resultados.</p>
-      `;
-      resultsEl.appendChild(box);
-    });
-
-    function generateAssistantAnswer(query, items) {
-      // Simple heurística: combine frases relevantes, evite repeticiones y devuelva estructura.
-      const parts = [];
-      parts.push(`Respuesta breve a: "${query}"`);
-      // tomamos la oración más relevante de cada respuesta (primeros 200 chars o primer punto)
-      items.forEach((it, idx) => {
-        let txt = it.answer || '';
-        let firstSentence = txt.split(/[.?!]\s/)[0];
-        if (!firstSentence || firstSentence.length < 20) {
-          firstSentence = txt.slice(0, 200);
-        }
-        parts.push(`${idx+1}. ${firstSentence.trim()}.`);
-      });
-      parts.push('\nSíntesis:');
-      // síntesis: unir frases clave sin duplicados
-      let synth = items.map(it => it.answer).join(' ');
-      // heurística: tomar hasta 600 chars
-      synth = synth.replace(/\s+/g, ' ').slice(0, 600);
-      parts.push(synth + '...');
-      parts.push('\nPara profundizar, revisa las fuentes listadas debajo.');
-      return { text: parts.join('\n\n') };
-    }
-
-    // --- Funcionalidad de voz (Web Speech API) ---
-    let recognition;
-    let recognizing = false;
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-      recognition.lang = 'es-ES';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        recognizing = true;
-        micBtn.classList.add('listening');
-      };
-      recognition.onend = () => {
-        recognizing = false;
-        micBtn.classList.remove('listening');
-      };
-      recognition.onerror = (e) => {
-        console.error('Speech recognition error', e);
-        recognizing = false;
-        micBtn.classList.remove('listening');
-        alert('Error con reconocimiento de voz: ' + e.error);
-      };
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        queryInput.value = transcript;
-        runSearch(transcript);
-      };
-
-      micBtn.addEventListener('click', () => {
-        if (recognizing) {
-          recognition.stop();
-          return;
-        }
-        try {
-          recognition.start();
-        } catch (err) {
-          console.warn('No se pudo iniciar reconocimiento', err);
-        }
-      });
-    } else {
-      micBtn.disabled = true;
-      micBtn.title = 'Reconocimiento de voz no soportado en este navegador';
-    }
-
-    // Inicial message
-    resultsEl.innerHTML = '<p class="hint">Ejemplo: "¿Qué es systemd?" o "permiso 755". Pulsa 🎤 para hablar.</p>';
-  </script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Buscador Inteligente — Diplomado Linux</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
+
+import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./styles.css";
+
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+import React, { useEffect, useState } from "react";
+import Fuse from "fuse.js";
+import SearchBox from "./components/SearchBox";
+import VoiceButton from "./components/VoiceButton";
+import Results from "./components/Results";
+import data from "./data/questions.json";
+
+type Item = {
+  id: number;
+  number?: number;
+  topic?: string;
+  question: string;
+  answer: string;
+};
+
+const fuse = new Fuse(data as Item[], {
+  keys: [
+    { name: "question", weight: 0.8 },
+    { name: "answer", weight: 0.6 },
+    { name: "topic", weight: 0.4 }
+  ],
+  includeMatches: true,
+  includeScore: true,
+  threshold: 0.35,
+  useExtendedSearch: true
+});
+
+export default function App() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Fuse.FuseResult<Item>[]>([]);
+  const [lastQueryByVoice, setLastQueryByVoice] = useState("");
+
+  useEffect(() => {
+    if (query.trim() === "") {
+      setResults([]);
+      return;
+    }
+    // If query looks like an exact search (wrap with quotes), use exact match mode
+    const res = fuse.search(query);
+    setResults(res.slice(0, 20)); // limit
+  }, [query]);
+
+  return (
+    <div style={{ padding: 20, fontFamily: "Inter, Arial, sans-serif", maxWidth: 900, margin: "0 auto" }}>
+      <h1>Buscador Inteligente — Diplomado Linux</h1>
+      <p>Escribe o habla tu pregunta. El buscador entiende palabras clave aunque no estén exactas y busca en preguntas y respuestas.</p>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <SearchBox value={query} onChange={setQuery} placeholder="Ej.: ¿qué es systemd y para qué sirve?" />
+        <VoiceButton onResult={(text) => { setQuery(text); setLastQueryByVoice(text); }} />
+      </div>
+
+      {lastQueryByVoice ? <p style={{ color: "#666" }}>Última búsqueda por voz: «{lastQueryByVoice}»</p> : null}
+
+      <Results results={results} query={query} />
+    </div>
+  );
+}
+
+        import React from "react";
+
+type Props = {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+};
+
+export default function SearchBox({ value, onChange, placeholder }: Props) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        flex: 1,
+        padding: "10px 12px",
+        fontSize: 16,
+        borderRadius: 6,
+        border: "1px solid #ccc"
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onChange("");
+      }}
+    />
+  );
+}
+
+        import React, { useEffect, useState } from "react";
+
+type Props = {
+  onResult: (text: string) => void;
+};
+
+export default function VoiceButton({ onResult }: Props) {
+  const [supported, setSupported] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+
+  useEffect(() => {
+    const w = window as any;
+    setSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+  }, []);
+
+  useEffect(() => {
+    let recognition: any;
+    const w = window as any;
+    const Rec = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!Rec) return;
+    recognition = new Rec();
+    recognition.lang = "es-ES";
+    recognition.interimResults = true;
+    recognition.onresult = (ev: any) => {
+      let text = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        text += ev.results[i][0].transcript;
+      }
+      setTranscript(text);
+      if (ev.results[ev.results.length - 1].isFinal) {
+        onResult(text.trim());
+        setListening(false);
+      }
+    };
+    recognition.onend = () => setListening(false);
+
+    if (listening) recognition.start();
+    else recognition.stop?.();
+
+    return () => recognition.stop?.();
+  }, [listening, onResult]);
+
+  if (!supported) {
+    return <button disabled style={{ padding: "8px 12px" }}>Voz no soportada</button>;
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <button
+        onClick={() => setListening((s) => !s)}
+        style={{
+          padding: "8px 12px",
+          background: listening ? "#e74c3c" : "#2ecc71",
+          color: "white",
+          border: "none",
+          borderRadius: 6,
+          cursor: "pointer"
+        }}
+      >
+        {listening ? "Detener" : "Hablar"}
+      </button>
+      <small style={{ color: "#666" }}>{transcript}</small>
+    </div>
+  );
+}
+
+        import React from "react";
+import Fuse from "fuse.js";
+
+type Item = {
+  id: number;
+  number?: number;
+  topic?: string;
+  question: string;
+  answer: string;
+};
+
+type Props = {
+  results: Fuse.FuseResult<Item>[];
+  query: string;
+};
+
+function highlight(text: string, matches?: Fuse.FuseResultMatch[]) {
+  if (!matches || matches.length === 0) return text;
+  // Build a set of ranges
+  const ranges: Array<{ start: number; end: number }> = [];
+  matches.forEach((m) => {
+    m.indices?.forEach(([s, e]) => ranges.push({ start: s, end: e + 1 }));
+  });
+  if (ranges.length === 0) return text;
+  // Merge ranges
+  ranges.sort((a, b) => a.start - b.start);
+  const merged: typeof ranges = [];
+  for (const r of ranges) {
+    if (!merged.length || r.start > merged[merged.length - 1].end) merged.push(r);
+    else merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, r.end);
+  }
+  // Build highlighted string
+  let out = "";
+  let last = 0;
+  for (const r of merged) {
+    out += escapeHtml(text.slice(last, r.start));
+    out += "<mark>" + escapeHtml(text.slice(r.start, r.end)) + "</mark>";
+    last = r.end;
+  }
+  out += escapeHtml(text.slice(last));
+  return out;
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+export default function Results({ results, query }: Props) {
+  if (!query || query.trim() === "") return null;
+  if (results.length === 0) {
+    return <div style={{ marginTop: 20 }}>No se encontraron resultados. Intenta usar otras palabras clave.</div>;
+  }
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <h2>Resultados ({results.length})</h2>
+      <div style={{ display: "grid", gap: 12 }}>
+        {results.map((r) => {
+          const item = r.item;
+          return (
+            <div key={item.id} style={{ padding: 12, borderRadius: 8, border: "1px solid #eee", background: "#fafafa" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <strong>{item.topic ?? "Tema desconocido"}</strong> — Pregunta #{item.number ?? item.id}
+                </div>
+                <div style={{ color: "#666" }}>Confianza: {(1 - (r.score ?? 0)).toFixed(2)}</div>
+              </div>
+
+              <h3 style={{ margin: "8px 0" }} dangerouslySetInnerHTML={{ __html: highlight(item.question, r.matches?.filter(m => m.key === "question")) }} />
+
+              <div dangerouslySetInnerHTML={{ __html: highlight(item.answer, r.matches?.filter(m => m.key === "answer")) }} style={{ color: "#222" }} />
+
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer" }}>Ver coincidencias y metadatos</summary>
+                <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "#444" }}>{JSON.stringify(r, null, 2)}</pre>
+              </details>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+      [
+  {
+    "id": 1,
+    "number": 1,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué es Linux y cuál es su propósito principal?",
+    "answer": "Linux es un sistema operativo de código abierto cuyo propósito es administrar los recursos del hardware y permitir la ejecución de programas."
+  },
+  {
+    "id": 2,
+    "number": 2,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué significa que Linux sea de código abierto?",
+    "answer": "Significa que su código fuente puede ser estudiado, modificado y redistribuido libremente."
+  },
+  {
+    "id": 3,
+    "number": 3,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Quién creó el kernel de Linux?",
+    "answer": "Linus Torvalds creó el kernel de Linux en 1991."
+  },
+  {
+    "id": 4,
+    "number": 4,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué es el software libre según la filosofía de Linux?",
+    "answer": "Es software que garantiza la libertad de usar, estudiar, modificar y compartir."
+  },
+  {
+    "id": 5,
+    "number": 5,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Cuál es la diferencia entre software libre y software propietario?",
+    "answer": "El software libre permite modificar su código, el propietario no."
+  },
+  {
+    "id": 6,
+    "number": 6,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué es el proyecto GNU?",
+    "answer": "Es un proyecto iniciado por Richard Stallman para crear un sistema operativo completamente libre."
+  },
+  {
+    "id": 7,
+    "number": 7,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué relación existe entre GNU y Linux?",
+    "answer": "Linux usa las herramientas de GNU para formar el sistema operativo completo GNU/Linux."
+  },
+  {
+    "id": 8,
+    "number": 8,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué es una distribución de Linux?",
+    "answer": "Es una versión de Linux que incluye el kernel, programas, bibliotecas y gestor de paquetes."
+  },
+  {
+    "id": 9,
+    "number": 9,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Por qué existen muchas distribuciones de Linux?",
+    "answer": "Porque cualquiera puede crear una basada en necesidades específicas."
+  },
+  {
+    "id": 10,
+    "number": 10,
+    "topic": "TEMA 1: FILOSOFÍA LINUX",
+    "question": "¿Qué es la licencia GPL?",
+    "answer": "Es una licencia que garantiza que el software siga siendo libre incluso si se modifica."
+  }
+  /* Nota: Aquí hay una muestra de 10 entradas. Reemplaza o expande este archivo con el dataset completo (620 entradas) que proporcionaste:
+     estructura: [{ id, number, topic, question, answer }, ...]
+     si quieres, puedo generar el archivo completo y añadírtelo directamente. */
+]
+
+      body { background: #f7f8fa; color: #111; }
+h1 { margin-bottom: 4px; }
+mark { background: #ffd54f; padding: 0 2px; border-radius: 2px; }
+
+      
