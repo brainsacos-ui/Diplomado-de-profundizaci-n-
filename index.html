@@ -1,50 +1,290 @@
-/* Estilos básicos y responsivos para el buscador inteligente */
-:root{
-  --bg:#f6f8fa;
-  --card:#ffffff;
-  --accent:#0366d6;
-  --muted:#6a737d;
-  --glass: rgba(3,102,214,0.06);
-}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buscador Inteligente - Diplomado Linux</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <!-- Fuse.js para búsqueda difusa -->
+  <script src="https://unpkg.com/fuse.js@6.6.2/dist/fuse.min.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>Buscador Inteligente — Diplomado Linux</h1>
+    <p class="lead">Escribe o habla tu pregunta. El buscador entiende palabras clave no exactas y busca en preguntas y respuestas.</p>
 
-*{box-sizing:border-box;font-family:Inter, "Segoe UI", Roboto, Arial, sans-serif}
-body{margin:0;background:var(--bg);color:#111}
-.container{max-width:980px;margin:32px auto;padding:20px}
-h1{margin:0 0 6px;font-size:1.6rem}
-.lead{margin:0 0 18px;color:var(--muted)}
-.search-panel{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-.search-panel input[type="text"]{
-  flex:1;padding:12px;border-radius:8px;border:1px solid #d0d7de;background:white;
-  font-size:1rem;
-}
-.search-panel button{padding:10px 12px;border-radius:8px;border:1px solid #d0d7de;background:var(--card);cursor:pointer}
-.search-panel button.secondary{background:var(--glass)}
-.search-panel button#micBtn.listening{background:#ffe8a1}
+    <div class="search-panel">
+      <input id="query" type="text" placeholder="Escribe tu pregunta aquí..." aria-label="Buscar pregunta o tema">
+      <button id="micBtn" title="Buscar con voz">🎤</button>
+      <button id="searchBtn">🔎 Buscar</button>
+      <button id="assistBtn" class="secondary">🤖 Preguntar como asistente</button>
+    </div>
 
-.controls{display:flex;gap:10px;align-items:center;margin-bottom:16px;color:var(--muted);font-size:0.9rem}
-.controls input[type="range"]{width:160px}
+    <div class="controls">
+      <label for="maxResults">Resultados:</label>
+      <input id="maxResults" type="number" min="1" max="20" value="6" />
+      <label for="threshold">Fuzziness (0-1):</label>
+      <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.35" />
+      <span id="thresholdVal">0.35</span>
+    </div>
 
-.results-header{margin:6px 0 12px}
-.no-results{color:#6b6b6b;padding:12px}
+    <section id="results" aria-live="polite"></section>
+    <footer>
+      <small>Diseñado para el "Diplomado de profundización en administración de sistemas operativos Open Source con certificación en Linux".</small>
+    </footer>
+  </main>
 
-.result-card{background:var(--card);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,0.03)}
-.result-card h3{margin:0 0 6px;font-size:1rem}
-.result-card .meta{font-size:0.85rem;color:var(--muted);margin-bottom:8px}
-.result-card .answer{color:#222;line-height:1.5}
-.result-actions{margin-top:10px;display:flex;gap:8px}
-.result-actions button{padding:6px 8px;border-radius:6px;border:1px solid #e5e7eb;background:#fafafa;cursor:pointer}
+  <!-- dataset -->
+  <script src="assets/questions.js"></script>
 
-mark{background: #fff3b0; padding:0 2px}
+  <script>
+    // Inicialización de Fuse.js (se configura más abajo)
+    let fuse;
+    const optionsTemplate = {
+      includeScore: true,
+      shouldSort: true,
+      threshold: 0.35,
+      keys: [
+        { name: 'question', weight: 0.7 },
+        { name: 'answer', weight: 0.3 }
+      ]
+    };
 
-.modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50}
-.modal-content{background:white;padding:18px;border-radius:10px;max-width:800px;width:95%;max-height:80vh;overflow:auto;position:relative}
-.modal-close{position:absolute;right:10px;top:10px;border:none;background:#f5f5f5;padding:6px;border-radius:6px;cursor:pointer}
+    function initFuse(threshold) {
+      const opts = JSON.parse(JSON.stringify(optionsTemplate));
+      opts.threshold = threshold;
+      fuse = new Fuse(QUESTIONS, opts);
+    }
 
-.assistant-box{background:linear-gradient(180deg,#fff,#fbfdff);padding:16px;border-radius:10px;border:1px solid #e6eef8}
-.assistant-box h2{margin-top:0}
-.assistant-box .asst-body{background:#f7fbff;padding:12px;border-radius:8px;margin:10px 0}
-.asst-sources .excerpt{font-size:0.95rem;color:#222;margin-top:6px;background:#fff;padding:8px;border-radius:6px;border:1px solid #eef6ff}
+    // Helpers para DOM
+    const queryInput = document.getElementById('query');
+    const searchBtn = document.getElementById('searchBtn');
+    const assistBtn = document.getElementById('assistBtn');
+    const resultsEl = document.getElementById('results');
+    const micBtn = document.getElementById('micBtn');
+    const maxResultsEl = document.getElementById('maxResults');
+    const thresholdEl = document.getElementById('threshold');
+    const thresholdVal = document.getElementById('thresholdVal');
 
-.hint{color:var(--muted)}
+    thresholdEl.addEventListener('input', () => {
+      thresholdVal.textContent = thresholdEl.value;
+      initFuse(parseFloat(thresholdEl.value));
+    });
 
-footer{margin-top:18px;color:var(--muted);font-size:0.85rem}
+    // Inicializa fuse con el valor por defecto
+    initFuse(parseFloat(thresholdEl.value));
+
+    function highlight(text, terms) {
+      if (!terms || terms.length === 0) return escapeHtml(text);
+      // resalta ocurrencias simples de terms (array de strings)
+      let out = escapeHtml(text);
+      terms.forEach(t => {
+        if (!t) return;
+        const re = new RegExp('('+escapeRegExp(t)+')', 'ig');
+        out = out.replace(re, '<mark>$1</mark>');
+      });
+      return out;
+    }
+
+    function escapeRegExp(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    function escapeHtml(unsafe) {
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function extractTermsFromQuery(q) {
+      // tokeniza por espacios y filtra palabras cortas
+      return q.split(/\s+/).filter(t => t.length>1);
+    }
+
+    function renderResults(results, query) {
+      resultsEl.innerHTML = '';
+      if (!results || results.length === 0) {
+        resultsEl.innerHTML = '<p class="no-results">No se encontraron resultados. Prueba con otras palabras clave o sube la fuzziness.</p>';
+        return;
+      }
+
+      // Construir lista ordenada por score (Fuse ya ordena)
+      const frag = document.createDocumentFragment();
+      const topHeader = document.createElement('div');
+      topHeader.className = 'results-header';
+      topHeader.innerHTML = `<strong>Resultados (${results.length})</strong> — Consulta: <em>${escapeHtml(query)}</em>`;
+      frag.appendChild(topHeader);
+
+      const terms = extractTermsFromQuery(query);
+
+      results.forEach((r, idx) => {
+        const item = r.item || r; // si es raw
+        const score = (r.score !== undefined) ? (r.score) : 0;
+        const card = document.createElement('article');
+        card.className = 'result-card';
+        card.innerHTML = `
+          <header>
+            <h3>${idx+1}. ${escapeHtml(item.question)}</h3>
+            <div class="meta">Tema: ${escapeHtml(item.topic || 'N/A')} • ID: ${escapeHtml(String(item.id || ''))} • Score: ${score.toFixed(3)}</div>
+          </header>
+          <section class="answer">
+            ${highlight(item.answer, terms)}
+          </section>
+          <footer class="result-actions">
+            <button class="copyBtn">Copiar</button>
+            <button class="viewBtn">Ver completa</button>
+          </footer>
+        `;
+        // acciones
+        card.querySelector('.copyBtn').addEventListener('click', () => {
+          navigator.clipboard.writeText(item.question + "\n\n" + item.answer);
+          alert('Copiado al portapapeles');
+        });
+        card.querySelector('.viewBtn').addEventListener('click', () => {
+          showModal(item);
+        });
+
+        frag.appendChild(card);
+      });
+
+      resultsEl.appendChild(frag);
+    }
+
+    function showModal(item) {
+      // modal simple
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <button class="modal-close">✖</button>
+          <h2>${escapeHtml(item.question)}</h2>
+          <pre class="modal-answer">${escapeHtml(item.answer)}</pre>
+          <p class="meta">Tema: ${escapeHtml(item.topic || 'N/A')} • ID: ${escapeHtml(String(item.id || ''))}</p>
+        </div>
+      `;
+      modal.querySelector('.modal-close').addEventListener('click', () => modal.remove());
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+      document.body.appendChild(modal);
+    }
+
+    function runSearch(rawQuery) {
+      const q = (rawQuery || '').trim();
+      if (!q) {
+        resultsEl.innerHTML = '<p class="no-results">Escribe o di una pregunta para buscar.</p>';
+        return;
+      }
+      const max = parseInt(maxResultsEl.value, 10) || 6;
+      const results = fuse.search(q, { limit: max });
+      renderResults(results, q);
+    }
+
+    searchBtn.addEventListener('click', () => runSearch(queryInput.value));
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch(queryInput.value);
+    });
+
+    // Mini-asistente: junta top 3 resultados y genera una respuesta organizada y didáctica
+    assistBtn.addEventListener('click', () => {
+      const q = queryInput.value.trim();
+      if (!q) { alert('Escribe o di una pregunta primero.'); return; }
+      const max = 3;
+      const results = fuse.search(q, { limit: max });
+      if (!results || results.length === 0) {
+        resultsEl.innerHTML = '<p class="no-results">No hay información suficiente para generar una respuesta. Intenta otras palabras clave.</p>';
+        return;
+      }
+      const topItems = results.map(r => r.item);
+      // Generar respuesta simple: encabezado, resumen por puntos, fuentes
+      const summary = generateAssistantAnswer(q, topItems);
+      resultsEl.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'assistant-box';
+      box.innerHTML = `
+        <h2>Asistente AI — Respuesta</h2>
+        <p class="asst-query">Consulta: <em>${escapeHtml(q)}</em></p>
+        <div class="asst-body">${escapeHtml(summary.text).replace(/\n/g, '<br>')}</div>
+        <h3>Fuentes y extractos</h3>
+        <ol class="asst-sources">
+          ${topItems.map(it => `<li><strong>${escapeHtml(it.question)}</strong><div class="excerpt">${escapeHtml(it.answer)}</div></li>`).join('')}
+        </ol>
+        <p class="asst-note"><em>Consejo:</em> Si necesitas más detalle de una fuente concreta, pulsa "Ver completa" en los resultados.</p>
+      `;
+      resultsEl.appendChild(box);
+    });
+
+    function generateAssistantAnswer(query, items) {
+      // Simple heurística: combine frases relevantes, evite repeticiones y devuelva estructura.
+      const parts = [];
+      parts.push(`Respuesta breve a: "${query}"`);
+      // tomamos la oración más relevante de cada respuesta (primeros 200 chars o primer punto)
+      items.forEach((it, idx) => {
+        let txt = it.answer || '';
+        let firstSentence = txt.split(/[.?!]\s/)[0];
+        if (!firstSentence || firstSentence.length < 20) {
+          firstSentence = txt.slice(0, 200);
+        }
+        parts.push(`${idx+1}. ${firstSentence.trim()}.`);
+      });
+      parts.push('\nSíntesis:');
+      // síntesis: unir frases clave sin duplicados
+      let synth = items.map(it => it.answer).join(' ');
+      // heurística: tomar hasta 600 chars
+      synth = synth.replace(/\s+/g, ' ').slice(0, 600);
+      parts.push(synth + '...');
+      parts.push('\nPara profundizar, revisa las fuentes listadas debajo.');
+      return { text: parts.join('\n\n') };
+    }
+
+    // --- Funcionalidad de voz (Web Speech API) ---
+    let recognition;
+    let recognizing = false;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'es-ES';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        recognizing = true;
+        micBtn.classList.add('listening');
+      };
+      recognition.onend = () => {
+        recognizing = false;
+        micBtn.classList.remove('listening');
+      };
+      recognition.onerror = (e) => {
+        console.error('Speech recognition error', e);
+        recognizing = false;
+        micBtn.classList.remove('listening');
+        alert('Error con reconocimiento de voz: ' + e.error);
+      };
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        queryInput.value = transcript;
+        runSearch(transcript);
+      };
+
+      micBtn.addEventListener('click', () => {
+        if (recognizing) {
+          recognition.stop();
+          return;
+        }
+        try {
+          recognition.start();
+        } catch (err) {
+          console.warn('No se pudo iniciar reconocimiento', err);
+        }
+      });
+    } else {
+      micBtn.disabled = true;
+      micBtn.title = 'Reconocimiento de voz no soportado en este navegador';
+    }
+
+    // Inicial message
+    resultsEl.innerHTML = '<p class="hint">Ejemplo: "¿Qué es systemd?" o "permiso 755". Pulsa 🎤 para hablar.</p>';
+  </script>
+</body>
+</html>
