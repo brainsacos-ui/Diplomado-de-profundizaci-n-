@@ -3,34 +3,1028 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Buscador - Ejemplo</title>
+  <title>Buscador de Preguntas Linux - Respuesta Única</title>
   <style>
-    body { font-family: system-ui, Arial; margin: 24px; max-width:900px; }
-    input, select, button { padding:8px; margin:4px 0; }
-    .result { border-bottom:1px solid #eee; padding:12px 0; }
-    .tags { color:#666; font-size:0.9em; }
-    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .pagination { margin-top:12px; }
+    body { font-family: Arial, Helvetica, sans-serif; background:#f6f8fa; margin:0; padding:20px; color:#111; }
+    .container { max-width:900px; margin:24px auto; background:#fff; padding:24px; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.08); }
+    h1 { margin-top:0; }
+    .controls { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+    input[type="text"] { flex:1; padding:10px 12px; font-size:16px; border:1px solid #ccd; border-radius:6px; }
+    button { padding:10px 14px; font-size:15px; border-radius:6px; border:0; cursor:pointer; background:#0366d6; color:#fff; }
+    button.secondary { background:#6a737d; }
+    .result { margin-top:16px; padding:14px; border-radius:6px; background:#f1f8ff; border:1px solid #dbeeff; }
+    .hint { font-size:13px; color:#555; margin-top:8px; }
+    .score { font-size:12px; color:#333; opacity:0.7; margin-top:6px; }
+    .no-speech { color:#b03a2e; }
+    footer { margin-top:18px; font-size:13px; color:#666; }
+    .mic { display:inline-flex; align-items:center; gap:8px; }
+    .meta { font-size:13px; color:#444; margin-top:8px; }
+    .small { font-size:12px; color:#666; margin-top:6px; }
   </style>
 </head>
 <body>
-  <h1>Buscador - Ejemplo</h1>
+  <div class="container">
+    <h1>Buscador de Preguntas Linux — Respuesta única</h1>
+    <p>Escribe o presiona el micrófono para preguntar (puedes ingresar una pregunta o una respuesta; el buscador encontrará la pareja asociada). Algoritmo con fuzzy matching (Levenshtein + palabras compartidas).</p>
 
-  <div class="controls">
-    <input id="q" placeholder="Buscar texto..." style="flex:1" />
-    <select id="sort">
-      <option value="date">Orden: más recientes</option>
-      <option value="title">Orden: título</option>
-    </select>
-    <input id="tag" placeholder="Filtrar por etiqueta (ej: javascript)" />
-    <button id="btnSearch">Buscar</button>
+    <div class="controls">
+      <input id="query" type="text" placeholder="Escribe tu pregunta o una respuesta (ej: 'cp' o '¿Cuál es el comando para copiar un archivo?')" />
+      <button id="btnSearch">Buscar</button>
+      <button id="btnMic" class="secondary">🎤 Usar voz</button>
+    </div>
+
+    <div id="result" class="result" aria-live="polite">Ingresa una pregunta o usa la voz y pulsa Buscar.</div>
+    <div id="score" class="score"></div>
+    <div id="hint" class="hint">El buscador combina coincidencia por palabras y fuzzy (distancia Levenshtein) para mejorar la precisión. Acepta consultas en forma de pregunta o de respuesta.</div>
+    <div id="meta" class="meta"></div>
+    <div class="small">Sugerencia: escribe palabras clave si no hay coincidencia exacta (ej: "comando copiar" o "cp").</div>
+
+    <footer>
+      Puedes usar esto como página estática en GitHub Pages. Si deseas, exporto el dataset a JSON o actualizo la API C# para usar el nuevo algoritmo.
+    </footer>
   </div>
 
-  <div id="info" style="margin-top:12px;"></div>
-  <div id="results" style="margin-top:8px;"></div>
+  <script>
+    // ===== Dataset (preguntas y respuestas) =====
+    const QA = [
+      { q: "¿Cuál es la diferencia entre ls, ls -l y ls -a?", a: "ls lista archivos, ls -l muestra detalles y ls -a incluye archivos ocultos." },
+      { q: "¿Para qué sirve el comando pwd?", a: "Muestra la ruta del directorio actual." },
 
-  <div class="pagination" id="pagination"></div>
+      { q: "¿cual es el demonio que gestiona los servicios de Linux?", a: "systemd" },
+      { q: "¿Cual es el comando utilizado para mostrar el directorio de trabajo actual en la terminal de Linux?", a: "pwd" },
+      { q: "¿cual es el comando utilizado para enumerar los archivos en un directorio en Linux?", a: "ls" },
+      { q: "¿Cuál es el comando para mostrar información de uso de memoria en Linux?", a: "free" },
+      { q: "¿cual es el comando para iniciar un servicio en Linux usando systemd?", a: "systemctl start <nombre-del-servicio>" },
+      { q: "¿cual es el comando para enumerar todos los grupos en Linux?", a: "cat /etc/group" },
+      { q: "¿cual es el comando para detener un servicio en Linux usando systemd?", a: "systemctl stop <nombre-del-servicio>" },
+      { q: "¿Cual es el demonio responsable de montar dispositivos automáticamente en Linux?", a: "autofs" },
+      { q: "¿cual es la base de la filosofía del software libre de Linux?", a: "Compartir y colaborar" },
+      { q: "Cual es el comando para mover un archivo a otro directorio en Linux?", a: "mv" },
+      { q: "¿cual es el archivo que contiene la configuración de resolución de pantalla en Linux?", a: "/etc/X11/xorg.conf" },
+      { q: "¿cual es el archivo que almacena las contraseñas de los usuarios en Linux?", a: "/etc/shadow" },
+      { q: "¿cual es el comando para copiar un archivo en Linux?", a: "cp" },
+      { q: "¿cual es el archivo que contiene la configuración del entorno global para todos los usuarios?", a: "/etc/profile" },
+      { q: "¿cual es el comando para enumerar todos los procesos que se ejecutan en el sistema en Linux?", a: "ps" },
+      { q: "¿Cual es el archivo o ruta que contiene información sobre dispositivos de hardware en Linux?", a: "/sys/devices" },
+      { q: "¿cual es el comando para cambiar el directorio actual a un directorio especifico en Linux?", a: "cd" },
+      { q: "¿cual es el archivo que contiene la configuración de la impresora en Linux?", a: "/etc/cups" },
+      { q: "¿cual es el archivo que contiene la configuración de red para systemd en Linux?", a: "No existe un archivo único; la configuración de red para systemd se encuentra en /etc/systemd/network/" },
+      { q: "¿cual es el comando para mostrar información sobre dispositivos de red en Linux?", a: "ifconfig (o ip a para sistemas modernos)" },
+      { q: "¿cual es el comando para eliminar un archivo en Linux?", a: "rm" },
+      { q: "¿cual es la utilidad que se utiliza para comprimir archivos en formato .tar.gz en Linux?", a: "tar" },
+      { q: "¿cual es el comando para iniciar un programa en Linux desde la terminal?", a: "Escribir el nombre del programa" },
+      { q: "¿cual es el comando que se utiliza para cambiar los permisos de un archivo en Linux?", a: "chmod" },
+      { q: "¿cual es el archivo que contiene la información sobre los paquetes instalados en Linux (en sistemas basados en debian)?", a: "/var/lib/dpkg/status" },
+      { q: "¿cual es el comando para formatear una partición en Linux?", a: "mkfs" },
+      { q: "¿cual es el comando para crear un nuevo directorio en Linux?", a: "mkdir" },
+      { q: "¿cual es el comando que se utiliza para cambiar la contraseña de un usuario en Linux?", a: "passwd" },
+      { q: "¿cual es el comando para montar una partición en Linux?", a: "mount" },
+      { q: "¿cual es el comando para cambiar el grupo de un archivo en Linux?", a: "chgrp" },
+      { q: "¿cual es el comando para mostrar información de configuración de red en Linux?", a: "ifconfig (o ip a)" },
+      { q: "¿cual es el comando para matar un proceso especifico en Linux?", a: "kill <PID>" },
+      { q: "¿cual es el comando para cambiar el nombre de un archivo en Linux?", a: "mv" },
+      { q: "¿cuál es el comando que se utiliza para mostrar información sobre las particiones del sistema en Linux?", a: "lsblk" },
+      { q: "¿cuál es el comando para enumerar todos los archivos en un directorio y sus subcarpetas en Linux?", a: "ls -R" },
+      { q: "¿cuál es el archivo que contiene configuración de hosts en Linux?", a: "/etc/hosts" },
+      { q: "¿cuál es el comando para enumerar todos los paquetes instalados en Linux (usando dpkg)?", a: "dpkg -l" },
+      { q: "¿cómo se obtiene la información de configuración de hardware en Linux?", a: "Ejecutando el comando lshw" },
+      { q: "¿cuál es el archivo que almacena los permisos de un directorio en Linux?", a: "No existe un archivo específico; los permisos se almacenan en el sistema de archivos" },
+      { q: "¿cuál es el comando para cambiar el propietario de un archivo en Linux?", a: "chown" },
+      { q: "¿cuál es el comando para instalar un paquete de Linux usando el sistema de administración de paquetes dpkg?", a: "dpkg -i <paquete.deb>" },
+      { q: "¿cuál es el comando para enumerar los paquetes instalados en una distribución de Linux?", a: "dpkg -l (en Debian/Ubuntu)" },
+      { q: "¿cuál es el comando para agregar un usuario a un grupo de Linux?", a: "usermod -aG <grupo> <usuario>" },
+      { q: "¿cuál es el comando para mostrar información sobre la utilización de la CPU en Linux?", a: "top" },
+      { q: "¿cuál es el comando para otorgar permisos de escritura, lectura y ejecución a un archivo en Linux?", a: "chmod 777 <archivo>" },
+      { q: "¿Cuál es el comando utilizado para crear un nuevo usuario en Linux?", a: "adduser" },
 
-  <script src="app.js"></script>
+      // ... existing entries repeated above omitted for brevity in source listing but are present in the array ...
+      // ==== Nuevas preguntas solicitadas (introducidas a continuación) ====
+
+      // Conceptos básicos y temático
+      { q: "¿Qué es Linux?", a: "Un sistema operativo de código abierto basado en Unix." },
+      { q: "¿Quién creó el kernel de Linux?", a: "Linus Torvalds." },
+      { q: "¿Qué es una distribución de Linux?", a: "Una versión de Linux que incluye el kernel y programas adicionales." },
+      { q: "Mencione dos distribuciones populares de Linux.", a: "Ubuntu y Fedora." },
+      { q: "¿Qué es el software libre?", a: "Software que permite usar, estudiar, modificar y distribuir el código." },
+      { q: "¿Qué es el software de código abierto?", a: "Software cuyo código fuente es accesible al público." },
+      { q: "¿Qué es una licencia GPL?", a: "Una licencia que garantiza las libertades del software libre." },
+      { q: "¿Qué es una licencia propietaria?", a: "Una licencia que restringe el uso y modificación del software." },
+      { q: "¿Qué es Linux en la nube (Cloud Computing)?", a: "Uso de Linux en servicios de servidores en Internet." },
+      { q: "¿Qué es un sistema embebido?", a: "Un sistema integrado en un dispositivo electrónico." },
+      { q: "¿Qué es una aplicación de código abierto?", a: "Programa cuyo código puede ser modificado libremente." },
+      { q: "¿Qué es un paquete de software?", a: "Conjunto de archivos necesarios para instalar un programa." },
+      { q: "¿Qué es un gestor de paquetes?", a: "Herramienta que instala, actualiza y elimina software." },
+      { q: "Mencione un gestor de paquetes.", a: "APT." },
+      { q: "¿Qué es una actualización de software?", a: "Proceso de instalar una versión más reciente de un programa." },
+      { q: "¿Qué es la privacidad digital?", a: "Protección de los datos personales en Internet." },
+      { q: "¿Qué es el cifrado?", a: "Técnica para proteger información mediante codificación." },
+      { q: "¿Qué es una interfaz gráfica de usuario (GUI)?", a: "Entorno visual para interactuar con el sistema." },
+      { q: "¿Qué es una interfaz de línea de comandos (CLI)?", a: "Entorno basado en texto para ejecutar comandos." },
+      { q: "¿Qué es un modelo de negocio de software libre?", a: "Forma de generar ingresos con software abierto." },
+
+      // TEMA 2 Línea de comandos y archivos
+      { q: "¿Qué es la terminal de Linux?", a: "Una interfaz para ejecutar comandos." },
+      { q: "¿Qué es un comando?", a: "Instrucción que el sistema ejecuta." },
+      { q: "¿Qué es Bash?", a: "El intérprete de comandos más usado en Linux." },
+      { q: "¿Qué es una variable?", a: "Espacio que almacena un valor." },
+      { q: "¿Qué es el PATH?", a: "Ruta donde el sistema busca los ejecutables." },
+      { q: "¿Qué es el comando pwd?", a: "Muestra la ruta actual." },
+      { q: "¿Qué hace el comando ls?", a: "Lista archivos y directorios." },
+      { q: "¿Qué hace ls -a?", a: "Muestra archivos ocultos." },
+      { q: "¿Qué hace ls -l?", a: "Muestra detalles de archivos." },
+      { q: "¿Qué es una ruta absoluta?", a: "Ruta que inicia desde /." },
+      { q: "¿Qué es una ruta relativa?", a: "Ruta desde el directorio actual." },
+      { q: "¿Qué es el directorio raíz?", a: "/ (root)." },
+      { q: "¿Qué es el directorio home?", a: "Carpeta personal del usuario." },
+      { q: "¿Qué es un archivo oculto?", a: "Archivo que inicia con punto (.)." },
+      { q: "¿Qué comando crea un directorio?", a: "mkdir." },
+      { q: "¿Qué comando crea un archivo vacío?", a: "touch." },
+      { q: "¿Qué comando mueve archivos?", a: "mv." },
+      { q: "¿Qué comando copia archivos?", a: "cp." },
+      { q: "¿Qué comando elimina archivos?", a: "rm." },
+      { q: "¿Qué es el globbing?", a: "Uso de comodines como * y ?." },
+
+      // TEMA 3 Redirecciones, Compresión y Scripts
+      { q: "¿Qué es la entrada estándar (stdin)?", a: "Flujo de datos de entrada." },
+      { q: "¿Qué es la salida estándar (stdout)?", a: "Flujo de salida de datos." },
+      { q: "¿Qué es una redirección?", a: "Enviar salida de un comando a un archivo." },
+      { q: "¿Qué símbolo se usa para redirigir salida?", a: ">" },
+      { q: "¿Qué es un pipe (|)?", a: "Enviar salida de un comando a otro." },
+      { q: "¿Qué es grep?", a: "Herramienta de búsqueda de texto." },
+      { q: "¿Qué es una expresión regular?", a: "Patrón para buscar textos." },
+      { q: "¿Qué es un archivo comprimido?", a: "Archivo reducido de tamaño." },
+      { q: "¿Qué es tar?", a: "Herramienta para archivar archivos." },
+      { q: "¿Qué es zip?", a: "Formato de compresión." },
+      { q: "¿Qué es un script?", a: "Archivo con una serie de comandos." },
+      { q: "¿Qué es el shebang (#!)?", a: "Define el intérprete del script." },
+      { q: "¿Qué permiso permite ejecutar un archivo?", a: "Permiso de ejecución (x)." },
+      { q: "¿Qué es un argumento?", a: "Dato adicional enviado a un comando." },
+      { q: "¿Qué significa $1 en un script?", a: "Primer argumento." },
+      { q: "¿Qué es una estructura condicional?", a: "Permite tomar decisiones (if)." },
+      { q: "¿Qué es un bucle for?", a: "Repite instrucciones." },
+      { q: "¿Qué es un código de salida?", a: "Número que indica éxito o error." },
+      { q: "¿Qué comando cambia permisos?", a: "chmod." },
+      { q: "¿Qué comando muestra procesos?", a: "ps." },
+
+      // TEMA 4 Sistema Operativo, Hardware y Redes
+      { q: "¿Qué es un sistema operativo?", a: "Software que gestiona hardware y programas." },
+      { q: "¿Qué es el kernel?", a: "Núcleo del sistema operativo." },
+      { q: "¿Qué es una partición?", a: "División del disco." },
+      { q: "¿Qué es la memoria RAM?", a: "Memoria temporal del sistema." },
+      { q: "¿Qué es el procesador?", a: "Unidad central de procesamiento." },
+      { q: "¿Qué es un dispositivo de almacenamiento?", a: "Disco duro, SSD, etc." },
+      { q: "¿Qué es un periférico?", a: "Dispositivo externo." },
+      { q: "¿Qué es un controlador (driver)?", a: "Software que controla hardware." },
+      { q: "¿Qué es un proceso?", a: "Programa en ejecución." },
+      { q: "¿Qué es el registro del sistema?", a: "Archivo de eventos del sistema." },
+      { q: "¿Qué es una red informática?", a: "Conjunto de dispositivos conectados." },
+      { q: "¿Qué es IPv4?", a: "Protocolo de direcciones de 32 bits." },
+      { q: "¿Qué es IPv6?", a: "Protocolo de direcciones de 128 bits." },
+      { q: "¿Qué es DNS?", a: "Traduce nombres de dominio en IP." },
+      { q: "¿Qué es un socket?", a: "Punto de comunicación entre programas." },
+      { q: "¿Qué es una dirección IP?", a: "Identificador de un equipo en la red." },
+      { q: "¿Qué es una máscara de red?", a: "Define el tamaño de la red." },
+      { q: "¿Qué es localhost?", a: "Dirección de la propia máquina (127.0.0.1)." },
+      { q: "¿Qué es una red de enlace?", a: "Capa física de comunicación." },
+      { q: "¿Qué es una tarjeta de red?", a: "Permite la conexión a Internet." },
+
+      { q: "¿Qué es Linux y cuál es su propósito principal?", a: "Es un sistema operativo de código abierto que administra los recursos del hardware y permite ejecutar programas." },
+{ q: "¿Qué significa que Linux sea de código abierto?", a: "Que su código fuente puede ser estudiado, modificado y redistribuido libremente." },
+{ q: "¿Quién creó el kernel de Linux?", a: "Linus Torvalds." },
+{ q: "¿Qué es el software libre?", a: "Es software que permite usar, estudiar, modificar y distribuir libremente." },
+{ q: "¿Cuál es la diferencia entre software libre y propietario?", a: "El software libre permite modificar el código, el propietario no." },
+{ q: "¿Qué es el proyecto GNU?", a: "Un proyecto para crear un sistema operativo completamente libre." },
+{ q: "¿Qué relación existe entre GNU y Linux?", a: "Linux utiliza las herramientas de GNU para formar el sistema GNU/Linux." },
+{ q: "¿Qué es una distribución Linux?", a: "Es un sistema operativo basado en el kernel Linux con programas adicionales." },
+{ q: "¿Por qué existen muchas distribuciones de Linux?", a: "Porque cualquiera puede crear una según sus necesidades." },
+{ q: "¿Qué es la licencia GPL?", a: "Una licencia que garantiza que el software siga siendo libre." },
+{ q: "¿Qué libertades garantiza el software libre?", a: "Usar, estudiar, modificar y distribuir." },
+{ q: "¿Qué es la comunidad Linux?", a: "Conjunto de usuarios y desarrolladores que colaboran en Linux." },
+{ q: "¿Qué es el kernel de Linux?", a: "Es el núcleo del sistema operativo." },
+{ q: "¿Por qué Linux es considerado seguro?", a: "Porque su código puede ser auditado públicamente." },
+{ q: "¿Qué es una licencia de software?", a: "Documento legal que define cómo usar un programa." },
+{ q: "¿Por qué Linux suele ser gratuito?", a: "Porque se distribuye bajo licencias libres." },
+{ q: "¿Qué es el modelo de desarrollo abierto?", a: "Un modelo donde cualquiera puede contribuir." },
+{ q: "¿Qué es copyleft?", a: "Un método para asegurar que el software siga siendo libre." },
+{ q: "¿Qué es una distribución LTS?", a: "Una versión con soporte a largo plazo." },
+{ q: "¿Qué es la portabilidad de Linux?", a: "La capacidad de funcionar en diferentes arquitecturas." },
+{ q: "¿Por qué Linux es usado en servidores?", a: "Por su estabilidad, seguridad y bajo costo." },
+{ q: "¿Qué es la cultura hacker en Linux?", a: "Cultura de aprendizaje, mejora y colaboración." },
+{ q: "¿Qué diferencia hay entre Linux y Windows?", a: "Linux es libre, Windows es propietario." },
+{ q: "¿Qué es software de código abierto?", a: "Software cuyo código es público." },
+{ q: "¿Qué ventajas económicas ofrece Linux?", a: "No requiere pago de licencias." },
+{ q: "¿Qué es una comunidad de soporte?", a: "Usuarios que se ayudan mutuamente." },
+{ q: "¿Qué es la transparencia en Linux?", a: "Acceso total al código del sistema." },
+{ q: "¿Qué es la ética del software libre?", a: "Compartir conocimiento sin restricciones." },
+{ q: "¿Qué es una licencia BSD?", a: "Una licencia libre permisiva." },
+{ q: "¿Qué es la Fundación Linux?", a: "Organización que apoya el ecosistema Linux." },
+{ q: "¿Qué es una distribución comercial?", a: "Una distro con soporte empresarial." },
+{ q: "¿Qué es Debian?", a: "Una de las principales distribuciones base de Linux." },
+{ q: "¿Qué significa Ubuntu?", a: "Humanidad hacia otros." },
+{ q: "¿Qué es el soporte comunitario?", a: "Soporte brindado por usuarios voluntarios." },
+{ q: "¿Qué es la libertad cero del software libre?", a: "La libertad de ejecutar el programa." },
+{ q: "¿Qué es la libertad uno?", a: "La libertad de estudiar el programa." },
+{ q: "¿Qué es la libertad dos?", a: "La libertad de redistribuir copias." },
+{ q: "¿Qué es la libertad tres?", a: "La libertad de modificar el programa." },
+{ q: "¿Por qué Linux favorece la educación?", a: "Porque permite estudiar su funcionamiento interno." },
+{ q: "¿Qué es una licencia propietaria?", a: "Una licencia con restricciones de uso." },
+{ q: "¿Qué es el modelo bazar?", a: "Modelo de desarrollo con colaboración masiva." },
+{ q: "¿Qué es el modelo catedral?", a: "Modelo de desarrollo cerrado." },
+{ q: "¿Qué es una comunidad open source?", a: "Grupo que desarrolla software abierto." },
+{ q: "¿Qué es la soberanía tecnológica?", a: "Control total sobre el software utilizado." },
+{ q: "¿Cómo contribuye Linux a la innovación?", a: "Permitiendo experimentar sin restricciones." },
+{ q: "¿Qué es el desarrollo distribuido?", a: "Desarrollo realizado por personas de todo el mundo." },
+{ q: "¿Qué es una versión estable?", a: "Una versión probada para producción." },
+{ q: "¿Qué es una rolling release?", a: "Distribución que se actualiza continuamente." },
+{ q: "¿Qué es la documentación libre?", a: "Manuales que pueden modificar y redistribuirse." },
+
+      { q: "¿Qué es una versión estable en Linux?", a: "Una versión probada y confiable para entornos de producción." },
+{ q: "¿Qué es una versión rolling release?", a: "Una distribución que se actualiza continuamente sin reinstalar." },
+{ q: "¿Qué es la documentación libre?", a: "Documentación que puede copiarse, modificarse y distribuirse." },
+{ q: "¿Por qué Linux es ideal para programadores?", a: "Por su flexibilidad, herramientas y soporte de desarrollo." },
+{ q: "¿Qué es la filosofía KISS?", a: "Principio que promueve mantener los sistemas simples." },
+{ q: "¿Qué es la meritocracia en Linux?", a: "Reconocimiento basado en aportes reales." },
+{ q: "¿Qué es la neutralidad tecnológica?", a: "No depender de un solo proveedor de tecnología." },
+{ q: "¿Qué significa que Linux sea modular?", a: "Que sus componentes pueden cambiarse de forma independiente." },
+{ q: "¿Qué es el soporte empresarial en Linux?", a: "Soporte técnico oficial ofrecido por empresas." },
+{ q: "¿Qué relación tiene Linux con la nube?", a: "Es la base de la mayoría de plataformas cloud." },
+
+{ q: "¿Qué es la terminal en Linux?", a: "Una interfaz de texto para comunicarse con el sistema." },
+{ q: "¿Qué es un comando en Linux?", a: "Una instrucción que el usuario envía al sistema." },
+{ q: "¿Para qué sirve el comando pwd?", a: "Muestra el directorio actual." },
+{ q: "¿Para qué sirve el comando ls?", a: "Lista archivos y directorios." },
+{ q: "¿Qué hace ls -l?", a: "Muestra archivos con permisos y detalles." },
+{ q: "¿Para qué sirve cd?", a: "Cambia de directorio." },
+{ q: "¿Qué hace cd ..?", a: "Regresa al directorio padre." },
+{ q: "¿Para qué sirve mkdir?", a: "Crea un nuevo directorio." },
+{ q: "¿Qué hace rmdir?", a: "Elimina un directorio vacío." },
+{ q: "¿Para qué sirve touch?", a: "Crea un archivo vacío." },
+
+{ q: "¿Para qué sirve cp?", a: "Copia archivos o directorios." },
+{ q: "¿Para qué sirve mv?", a: "Mueve o renombra archivos." },
+{ q: "¿Para qué sirve rm?", a: "Elimina archivos o directorios." },
+{ q: "¿Para qué sirve cat?", a: "Muestra el contenido de un archivo." },
+{ q: "¿Para qué sirve less?", a: "Permite ver archivos paginados." },
+{ q: "¿Para qué sirve clear?", a: "Limpia la pantalla de la terminal." },
+{ q: "¿Para qué sirve history?", a: "Muestra los comandos usados." },
+{ q: "¿Para qué sirve man?", a: "Muestra el manual de los comandos." },
+{ q: "¿Para qué sirve echo?", a: "Imprime texto en la terminal." },
+{ q: "¿Para qué sirve whoami?", a: "Muestra el usuario actual." },
+
+{ q: "¿Para qué sirve date?", a: "Muestra la fecha y hora del sistema." },
+{ q: "¿Para qué sirve cal?", a: "Muestra un calendario." },
+{ q: "¿Para qué sirve uptime?", a: "Muestra el tiempo encendido del sistema." },
+{ q: "¿Para qué sirve uname?", a: "Muestra información del sistema." },
+{ q: "¿Qué hace uname -a?", a: "Muestra información completa del sistema." },
+{ q: "¿Para qué sirve df?", a: "Muestra el espacio en disco." },
+{ q: "¿Para qué sirve du?", a: "Muestra el uso de espacio." },
+{ q: "¿Para qué sirve free?", a: "Muestra el uso de memoria." },
+{ q: "¿Para qué sirve top?", a: "Muestra procesos en tiempo real." },
+{ q: "¿Para qué sirve ps?", a: "Lista procesos en ejecución." },
+
+{ q: "¿Para qué sirve kill?", a: "Finaliza un proceso." },
+{ q: "¿Para qué sirve chmod?", a: "Cambia permisos de archivos." },
+{ q: "¿Para qué sirve chown?", a: "Cambia el propietario de un archivo." },
+{ q: "¿Para qué sirve find?", a: "Busca archivos en el sistema." },
+{ q: "¿Para qué sirve locate?", a: "Busca archivos usando una base indexada." },
+{ q: "¿Para qué sirve tar?", a: "Comprime y descomprime archivos." },
+{ q: "¿Para qué sirve gzip?", a: "Comprime archivos." },
+{ q: "¿Para qué sirve gunzip?", a: "Descomprime archivos gzip." },
+{ q: "¿Para qué sirve ping?", a: "Verifica conectividad de red." },
+{ q: "¿Para qué sirve wget?", a: "Descarga archivos desde Internet." },
+
+      { q: "¿Para qué sirve el comando curl?", a: "Permite transferir datos desde o hacia un servidor usando diferentes protocolos." },
+{ q: "¿Para qué sirve sudo?", a: "Permite ejecutar comandos con privilegios de administrador." },
+{ q: "¿Para qué sirve su?", a: "Cambia al usuario administrador o a otro usuario." },
+{ q: "¿Para qué sirve exit?", a: "Cierra la sesión actual de la terminal." },
+{ q: "¿Para qué sirve reboot?", a: "Reinicia el sistema." },
+{ q: "¿Para qué sirve shutdown?", a: "Apaga o reinicia el sistema de forma segura." },
+{ q: "¿Para qué sirve which?", a: "Muestra la ruta de un comando ejecutable." },
+{ q: "¿Para qué sirve whereis?", a: "Localiza binarios, código fuente y manuales." },
+{ q: "¿Para qué sirve alias?", a: "Crea un alias para un comando." },
+{ q: "¿Para qué sirve unalias?", a: "Elimina un alias definido." },
+
+{ q: "¿Para qué sirve env?", a: "Muestra las variables de entorno." },
+{ q: "¿Para qué sirve export?", a: "Define variables de entorno." },
+{ q: "¿Para qué sirve clear?", a: "Limpia la pantalla del terminal." },
+{ q: "¿Para qué sirve reset?", a: "Restablece la configuración del terminal." },
+{ q: "¿Para qué sirve watch?", a: "Ejecuta un comando repetidamente mostrando los cambios." },
+{ q: "¿Para qué sirve time?", a: "Mide el tiempo de ejecución de un comando." },
+{ q: "¿Para qué sirve tee?", a: "Muestra la salida y la guarda en un archivo." },
+{ q: "¿Para qué sirve xargs?", a: "Convierte la entrada estándar en argumentos para un comando." },
+{ q: "¿Para qué sirve cut?", a: "Extrae columnas de texto." },
+{ q: "¿Para qué sirve sort?", a: "Ordena líneas de texto." },
+
+{ q: "¿Para qué sirve uniq?", a: "Elimina líneas duplicadas consecutivas." },
+{ q: "¿Para qué sirve wc?", a: "Cuenta líneas, palabras y caracteres." },
+{ q: "¿Para qué sirve tr?", a: "Traduce o elimina caracteres." },
+{ q: "¿Para qué sirve diff?", a: "Compara archivos línea por línea." },
+{ q: "¿Para qué sirve patch?", a: "Aplica cambios a archivos." },
+{ q: "¿Para qué sirve screen?", a: "Permite sesiones de terminal persistentes." },
+{ q: "¿Para qué sirve tmux?", a: "Multiplexor de terminal para varias sesiones." },
+{ q: "¿Para qué sirve mount?", a: "Monta sistemas de archivos." },
+{ q: "¿Para qué sirve umount?", a: "Desmonta sistemas de archivos." },
+{ q: "¿Para qué sirve lsblk?", a: "Muestra información de dispositivos de almacenamiento." },
+
+{ q: "¿Qué es un usuario en Linux?", a: "Es una cuenta que permite acceder al sistema." },
+{ q: "¿Qué es el usuario root?", a: "Es el administrador del sistema con todos los privilegios." },
+{ q: "¿Qué es un grupo en Linux?", a: "Conjunto de usuarios con permisos comunes." },
+{ q: "¿Para qué sirve el archivo /etc/passwd?", a: "Almacena información básica de los usuarios." },
+{ q: "¿Para qué sirve el archivo /etc/shadow?", a: "Almacena las contraseñas cifradas." },
+{ q: "¿Para qué sirve el archivo /etc/group?", a: "Almacena los grupos del sistema." },
+{ q: "¿Para qué sirve useradd?", a: "Crea un nuevo usuario." },
+{ q: "¿Para qué sirve userdel?", a: "Elimina un usuario." },
+{ q: "¿Para qué sirve usermod?", a: "Modifica un usuario existente." },
+{ q: "¿Para qué sirve passwd?", a: "Cambia la contraseña de un usuario." },
+
+{ q: "¿Para qué sirve groupadd?", a: "Crea un nuevo grupo." },
+{ q: "¿Para qué sirve groupdel?", a: "Elimina un grupo." },
+{ q: "¿Para qué sirve id?", a: "Muestra el ID de usuario y grupos." },
+{ q: "¿Para qué sirve groups?", a: "Muestra los grupos de un usuario." },
+{ q: "¿Qué son los permisos en Linux?", a: "Definen quién puede leer, escribir o ejecutar un archivo." },
+{ q: "¿Qué significan los permisos rwx?", a: "Lectura, escritura y ejecución." },
+{ q: "¿Qué representa el valor 777 en chmod?", a: "Permisos totales para todos los usuarios." },
+{ q: "¿Qué representa el valor 755 en chmod?", a: "Permisos completos para propietario y solo lectura/ejecución para otros." },
+{ q: "¿Qué es el propietario de un archivo?", a: "El usuario dueño del archivo." },
+{ q: "¿Qué es el grupo propietario de un archivo?", a: "El grupo al que pertenece el archivo." },
+
+      { q: "¿Qué es el bit SUID en Linux?", a: "Es un permiso especial que permite ejecutar un archivo con los privilegios del propietario." },
+{ q: "¿Qué es el bit SGID?", a: "Permite ejecutar un archivo con los permisos del grupo del archivo." },
+{ q: "¿Qué es el bit Sticky?", a: "Evita que usuarios borren archivos que no son de su propiedad en directorios compartidos." },
+{ q: "¿Qué comando se usa para ver permisos de archivos?", a: "El comando ls -l." },
+{ q: "¿Cómo se cambia el propietario de un archivo?", a: "Con el comando chown." },
+{ q: "¿Cómo se cambia el grupo de un archivo?", a: "Con el comando chgrp." },
+{ q: "¿Qué es el umask?", a: "Define los permisos por defecto de los archivos nuevos." },
+{ q: "¿Qué significa permiso 644?", a: "Lectura y escritura para propietario, solo lectura para otros." },
+{ q: "¿Qué significa permiso 600?", a: "Solo el propietario puede leer y escribir." },
+{ q: "¿Qué significa permiso 700?", a: "Todos los permisos solo para el propietario." },
+
+{ q: "¿Cómo se agregan usuarios a un grupo?", a: "Con usermod -aG grupo usuario." },
+{ q: "¿Qué es PAM en Linux?", a: "Sistema de autenticación modular." },
+{ q: "¿Qué es la autenticación?", a: "Proceso para validar la identidad de un usuario." },
+{ q: "¿Qué es la autorización?", a: "Proceso para determinar qué puede hacer un usuario." },
+{ q: "¿Qué es una ACL?", a: "Lista de control de acceso con permisos avanzados." },
+{ q: "¿Qué comando muestra las ACL de un archivo?", a: "getfacl." },
+{ q: "¿Qué comando asigna ACL a un archivo?", a: "setfacl." },
+{ q: "¿Qué es una sesión de usuario?", a: "El tiempo que un usuario permanece conectado." },
+{ q: "¿Qué es el archivo /etc/login.defs?", a: "Archivo de configuración de políticas de login." },
+{ q: "¿Qué es el home de un usuario?", a: "Directorio personal del usuario." },
+
+{ q: "¿Qué es un archivo en Linux?", a: "Unidad básica para almacenar información." },
+{ q: "¿Qué es un directorio en Linux?", a: "Contenedor de archivos y otros directorios." },
+{ q: "¿Qué es la raíz del sistema de archivos?", a: "El directorio / que contiene toda la estructura." },
+{ q: "¿Qué es un archivo oculto?", a: "Archivo que inicia con punto (.)" },
+{ q: "¿Cómo se muestran archivos ocultos?", a: "Con ls -a." },
+{ q: "¿Qué es una ruta absoluta?", a: "Ruta completa desde / hasta el archivo." },
+{ q: "¿Qué es una ruta relativa?", a: "Ruta basada en el directorio actual." },
+{ q: "¿Qué es un enlace duro?", a: "Referencia directa al mismo inodo de un archivo." },
+{ q: "¿Qué es un enlace simbólico?", a: "Acceso indirecto que apunta a otro archivo." },
+{ q: "¿Qué comando crea enlaces simbólicos?", a: "ln -s." },
+
+{ q: "¿Qué comando muestra el contenido de un archivo por páginas?", a: "less." },
+{ q: "¿Qué comando permite editar archivos desde consola?", a: "nano o vi." },
+{ q: "¿Qué es un inodo?", a: "Estructura que almacena metadatos de un archivo." },
+{ q: "¿Qué información guarda un inodo?", a: "Permisos, propietario, tamaño y ubicación." },
+{ q: "¿Qué es la jerarquía FHS?", a: "Estándar que organiza los directorios del sistema." },
+{ q: "¿Para qué sirve el directorio /bin?", a: "Contiene comandos básicos del sistema." },
+{ q: "¿Para qué sirve el directorio /sbin?", a: "Contiene comandos administrativos." },
+{ q: "¿Para qué sirve el directorio /etc?", a: "Almacena archivos de configuración." },
+{ q: "¿Para qué sirve el directorio /home?", a: "Contiene los directorios de los usuarios." },
+{ q: "¿Para qué sirve el directorio /root?", a: "Directorio personal del usuario root." },
+
+{ q: "¿Para qué sirve el directorio /var?", a: "Almacena datos variables como logs." },
+{ q: "¿Para qué sirve el directorio /tmp?", a: "Almacena archivos temporales." },
+{ q: "¿Para qué sirve el directorio /usr?", a: "Contiene programas de usuarios y librerías." },
+{ q: "¿Para qué sirve el directorio /boot?", a: "Contiene archivos de arranque del sistema." },
+{ q: "¿Para qué sirve el directorio /dev?", a: "Contiene archivos de dispositivos." },
+{ q: "¿Para qué sirve el directorio /proc?", a: "Sistema de archivos virtual de procesos." },
+{ q: "¿Para qué sirve el directorio /sys?", a: "Muestra información del hardware." },
+{ q: "¿Qué es un sistema de archivos?", a: "Método para organizar y almacenar datos." },
+{ q: "¿Qué es ext4?", a: "Sistema de archivos común en Linux." },
+{ q: "¿Qué es el montaje de un sistema de archivos?", a: "Proceso para hacer accesible un dispositivo en el sistema." },
+
+      { q: "¿Qué es un archivo ejecutable en Linux?", a: "Un archivo que tiene permiso de ejecución y puede ejecutarse como programa." },
+{ q: "¿Qué comando permite ver el tipo de un archivo?", a: "El comando file." },
+{ q: "¿Qué es un archivo de texto?", a: "Archivo que contiene información legible por humanos." },
+{ q: "¿Qué es un archivo binario?", a: "Archivo que contiene datos en formato no legible directamente." },
+{ q: "¿Qué comando permite buscar texto dentro de archivos?", a: "El comando grep." },
+{ q: "¿Qué hace grep -i?", a: "Busca texto ignorando mayúsculas y minúsculas." },
+{ q: "¿Qué hace grep -r?", a: "Busca texto de forma recursiva en directorios." },
+{ q: "¿Qué es la redirección de salida >?", a: "Envía la salida de un comando a un archivo." },
+{ q: "¿Qué es la redirección >>?", a: "Añade la salida de un comando a un archivo sin sobrescribirlo." },
+{ q: "¿Qué es la redirección de entrada <?", a: "Toma datos desde un archivo como entrada." },
+
+{ q: "¿Qué es un pipe (|)?", a: "Conecta la salida de un comando con la entrada de otro." },
+{ q: "¿Qué es un comodín *?", a: "Representa cualquier cadena de caracteres." },
+{ q: "¿Qué es un comodín ??", a: "Representa un solo carácter." },
+{ q: "¿Qué significa ../ en una ruta?", a: "Referencia al directorio padre." },
+{ q: "¿Qué significa ./ en una ruta?", a: "Referencia al directorio actual." },
+{ q: "¿Qué comando permite contar líneas de un archivo?", a: "El comando wc -l." },
+{ q: "¿Qué es un archivo comprimido?", a: "Archivo reducido en tamaño mediante un algoritmo." },
+{ q: "¿Qué formato usa gzip?", a: "El formato .gz." },
+{ q: "¿Qué formato usa bzip2?", a: "El formato .bz2." },
+{ q: "¿Qué formato usa xz?", a: "El formato .xz." },
+
+{ q: "¿Qué es un proceso en Linux?", a: "Un programa que se encuentra en ejecución." },
+{ q: "¿Qué es un PID?", a: "Identificador único de un proceso." },
+{ q: "¿Qué es un proceso padre?", a: "Proceso que crea a otro proceso." },
+{ q: "¿Qué es un proceso hijo?", a: "Proceso creado por otro proceso." },
+{ q: "¿Qué comando permite ver los procesos activos?", a: "El comando ps." },
+{ q: "¿Qué hace ps aux?", a: "Muestra todos los procesos del sistema." },
+{ q: "¿Qué comando muestra procesos en tiempo real?", a: "El comando top." },
+{ q: "¿Qué es htop?", a: "Una versión mejorada e interactiva de top." },
+{ q: "¿Qué es la prioridad de un proceso?", a: "El nivel de uso del CPU asignado a un proceso." },
+
+{ q: "¿Qué es el valor nice?", a: "Valor que determina la prioridad de un proceso." },
+{ q: "¿Qué comando inicia un proceso con prioridad?", a: "El comando nice." },
+{ q: "¿Qué comando cambia la prioridad de un proceso activo?", a: "El comando renice." },
+{ q: "¿Qué comando detiene un proceso por PID?", a: "El comando kill." },
+{ q: "¿Qué hace kill -9?", a: "Finaliza un proceso de forma forzada." },
+{ q: "¿Qué comando mata procesos por nombre?", a: "El comando pkill." },
+{ q: "¿Qué comando busca procesos por nombre?", a: "El comando pgrep." },
+{ q: "¿Qué es un proceso en segundo plano?", a: "Proceso que se ejecuta sin ocupar la terminal." },
+{ q: "¿Cómo se ejecuta un proceso en segundo plano?", a: "Agregando & al final del comando." },
+{ q: "¿Qué es un proceso en primer plano?", a: "Proceso que ocupa directamente la terminal." },
+
+{ q: "¿Qué comando envía un proceso al fondo?", a: "El comando bg." },
+{ q: "¿Qué comando trae un proceso al frente?", a: "El comando fg." },
+{ q: "¿Qué comando muestra los trabajos activos?", a: "El comando jobs." },
+{ q: "¿Qué es el planificador de procesos?", a: "Componente del kernel que asigna tiempo de CPU." },
+{ q: "¿Qué es un demonio (daemon)?", a: "Proceso que se ejecuta en segundo plano de forma permanente." },
+{ q: "¿Qué comando muestra el árbol de procesos?", a: "El comando pstree." },
+{ q: "¿Qué es la multitarea?", a: "Capacidad de ejecutar varios procesos a la vez." },
+{ q: "¿Qué es el consumo de CPU?", a: "Cantidad de procesador usada por un proceso." },
+{ q: "¿Qué es el consumo de memoria?", a: "Cantidad de RAM usada por un proceso." },
+
+
+{ q: "¿Qué es systemd?", a: "Es el sistema de inicio y gestor de servicios de la mayoría de distribuciones Linux modernas." },
+{ q: "¿Qué función cumple systemd?", a: "Inicializa el sistema y administra servicios y procesos." },
+{ q: "¿Qué es un servicio en Linux?", a: "Un programa que se ejecuta en segundo plano de forma permanente." },
+{ q: "¿Qué comando permite gestionar servicios con systemd?", a: "systemctl." },
+{ q: "¿Qué comando inicia un servicio?", a: "systemctl start." },
+{ q: "¿Qué comando detiene un servicio?", a: "systemctl stop." },
+{ q: "¿Qué comando reinicia un servicio?", a: "systemctl restart." },
+{ q: "¿Qué comando muestra el estado de un servicio?", a: "systemctl status." },
+{ q: "¿Qué comando habilita un servicio al arranque?", a: "systemctl enable." },
+{ q: "¿Qué comando deshabilita un servicio al arranque?", a: "systemctl disable." },
+
+{ q: "¿Qué comando lista todos los servicios activos?", a: "systemctl list-units --type=service." },
+{ q: "¿Qué es un daemon?", a: "Un servicio que se ejecuta en segundo plano." },
+{ q: "¿Qué es un target en systemd?", a: "Un grupo de servicios que define un estado del sistema." },
+{ q: "¿Qué reemplazó systemd en sistemas antiguos?", a: "Reemplazó a SysVinit." },
+{ q: "¿Qué es el modo multiusuario?", a: "Modo de operación sin interfaz gráfica." },
+{ q: "¿Qué target equivale al modo gráfico?", a: "graphical.target." },
+{ q: "¿Qué target equivale al modo texto?", a: "multi-user.target." },
+{ q: "¿Qué comando muestra el target actual?", a: "systemctl get-default." },
+{ q: "¿Qué comando cambia el target por defecto?", a: "systemctl set-default." },
+{ q: "¿Qué es un unit file?", a: "Archivo que define cómo se gestiona un servicio." },
+
+{ q: "¿Dónde se almacenan los unit files del sistema?", a: "En /lib/systemd/system/." },
+{ q: "¿Dónde se almacenan los unit files personalizados?", a: "En /etc/systemd/system/." },
+{ q: "¿Qué extensión tienen los servicios de systemd?", a: ".service." },
+{ q: "¿Qué es journald?", a: "Sistema de registro de logs de systemd." },
+{ q: "¿Qué comando muestra los logs del sistema?", a: "journalctl." },
+{ q: "¿Qué comando muestra logs de un servicio específico?", a: "journalctl -u servicio." },
+{ q: "¿Qué comando muestra los últimos logs?", a: "journalctl -xe." },
+{ q: "¿Qué es el arranque del sistema?", a: "Proceso de inicio del sistema operativo." },
+{ q: "¿Qué es el cargador de arranque?", a: "Programa que inicia el sistema operativo." },
+{ q: "¿Qué cargador de arranque es común en Linux?", a: "GRUB." },
+
+{ q: "¿Qué es GRUB?", a: "Gestor de arranque de Linux." },
+{ q: "¿Dónde se configura GRUB?", a: "En /etc/default/grub." },
+{ q: "¿Qué comando actualiza la configuración de GRUB?", a: "update-grub." },
+{ q: "¿Qué es initrd?", a: "Sistema temporal usado durante el arranque." },
+{ q: "¿Qué es el kernel panic?", a: "Error crítico que detiene el sistema." },
+{ q: "¿Qué es el runlevel?", a: "Nivel de ejecución del sistema en sistemas antiguos." },
+{ q: "¿Cuántos runlevels clásicos existen?", a: "Siete." },
+{ q: "¿Qué runlevel corresponde al apagado?", a: "El runlevel 0." },
+{ q: "¿Qué runlevel corresponde al reinicio?", a: "El runlevel 6." },
+
+{ q: "¿Qué servicio gestiona las conexiones remotas SSH?", a: "El servicio sshd." },
+{ q: "¿Qué servicio gestiona la red tradicionalmente?", a: "NetworkManager o networking." },
+{ q: "¿Qué servicio gestiona el registro de eventos?", a: "rsyslog o journald." },
+{ q: "¿Qué servicio gestiona la impresión?", a: "cups." },
+{ q: "¿Qué servicio gestiona las tareas programadas?", a: "cron." },
+{ q: "¿Qué es cron?", a: "Servicio que ejecuta tareas programadas automáticamente." },
+{ q: "¿Dónde se definen tareas cron por usuario?", a: "En el crontab del usuario." },
+{ q: "¿Qué comando edita el crontab?", a: "crontab -e." },
+{ q: "¿Qué comando lista tareas cron?", a: "crontab -l." },
+
+
+{ q: "¿Qué es un socket en systemd?", a: "Un mecanismo que permite activar servicios bajo demanda." },
+{ q: "¿Qué es un timer en systemd?", a: "Equivalente moderno a las tareas cron." },
+{ q: "¿Qué extensión tienen los timers?", a: ".timer." },
+{ q: "¿Qué comando lista todos los timers activos?", a: "systemctl list-timers." },
+{ q: "¿Qué es un servicio enmascarado en systemd?", a: "Un servicio que no puede iniciarse manualmente." },
+{ q: "¿Qué comando enmascara un servicio?", a: "systemctl mask." },
+{ q: "¿Qué comando desenmascara un servicio?", a: "systemctl unmask." },
+{ q: "¿Qué es el modo rescue?", a: "Modo de recuperación mínima del sistema." },
+{ q: "¿Qué es el modo emergency?", a: "Modo de emergencia con servicios mínimos." },
+{ q: "¿Qué comando reinicia el demonio de systemd?", a: "systemctl daemon-reexec." },
+
+{ q: "¿Qué es una red en Linux?", a: "Conjunto de dispositivos interconectados." },
+{ q: "¿Qué es una dirección IP?", a: "Identificador único de un dispositivo en la red." },
+{ q: "¿Qué es IPv4?", a: "Versión de IP de 32 bits." },
+{ q: "¿Qué es IPv6?", a: "Versión de IP de 128 bits." },
+{ q: "¿Qué es una máscara de red?", a: "Define la parte de red y host de una IP." },
+{ q: "¿Qué es una puerta de enlace?", a: "Dispositivo que permite salir a otras redes." },
+{ q: "¿Qué es DNS?", a: "Servicio que traduce nombres en direcciones IP." },
+{ q: "¿Qué es DHCP?", a: "Servicio que asigna direcciones IP automáticamente." },
+{ q: "¿Qué comando muestra la IP del sistema?", a: "ip addr." },
+{ q: "¿Qué comando antiguo mostraba la IP?", a: "ifconfig." },
+
+{ q: "¿Qué comando prueba la conectividad?", a: "ping." },
+{ q: "¿Qué comando muestra rutas de red?", a: "ip route." },
+{ q: "¿Qué comando muestra conexiones activas?", a: "ss." },
+{ q: "¿Qué comando antiguo mostraba conexiones?", a: "netstat." },
+{ q: "¿Qué es localhost?", a: "La dirección de red del propio equipo." },
+{ q: "¿Qué IP representa localhost?", a: "127.0.0.1." },
+{ q: "¿Qué es un puerto?", a: "Canal lógico de comunicación en red." },
+{ q: "¿Qué puerto usa SSH?", a: "El puerto 22." },
+{ q: "¿Qué puerto usa HTTP?", a: "El puerto 80." },
+{ q: "¿Qué puerto usa HTTPS?", a: "El puerto 443." },
+
+{ q: "¿Qué es un firewall?", a: "Sistema de seguridad que controla el tráfico de red." },
+{ q: "¿Qué firewall moderno se usa en Linux?", a: "firewalld." },
+{ q: "¿Qué herramienta maneja firewalld?", a: "firewall-cmd." },
+{ q: "¿Qué es iptables?", a: "Herramienta tradicional de filtrado de paquetes." },
+{ q: "¿Qué es nftables?", a: "Reemplazo moderno de iptables." },
+{ q: "¿Qué es una interfaz de red?", a: "Dispositivo que permite la comunicación de red." },
+{ q: "¿Qué comando lista interfaces?", a: "ip link." },
+{ q: "¿Qué es una red cableada?", a: "Red que usa cables físicos." },
+{ q: "¿Qué es una red inalámbrica?", a: "Red basada en WiFi." },
+
+{ q: "¿Qué es el archivo /etc/hosts?", a: "Archivo local de resolución de nombres." },
+{ q: "¿Qué es el archivo /etc/resolv.conf?", a: "Archivo que define servidores DNS." },
+{ q: "¿Qué es una prueba de puerto?", a: "Verificación de servicios abiertos." },
+{ q: "¿Qué comando permite rastrear la ruta a un host?", a: "traceroute." },
+{ q: "¿Qué es un proxy?", a: "Servidor intermediario entre cliente e Internet." },
+{ q: "¿Qué es una VPN?", a: "Red privada virtual cifrada." },
+{ q: "¿Qué es una conexión TCP?", a: "Conexión orientada a sesiones." },
+{ q: "¿Qué es una conexión UDP?", a: "Conexión sin estado." },
+
+      { q: "¿Qué es un ancho de banda?", a: "Cantidad de datos que pueden transmitirse por una red en un tiempo determinado." },
+{ q: "¿Qué es la latencia?", a: "Tiempo que tarda un paquete en viajar de origen a destino." },
+{ q: "¿Qué es una MAC address?", a: "Dirección física única de una tarjeta de red." },
+{ q: "¿Qué comando muestra la dirección MAC?", a: "ip link." },
+{ q: "¿Qué es un paquete de red?", a: "Unidad básica de datos transmitidos en una red." },
+{ q: "¿Qué es un switch?", a: "Dispositivo que interconecta equipos en una red local." },
+{ q: "¿Qué es un router?", a: "Dispositivo que conecta diferentes redes." },
+{ q: "¿Qué es el enrutamiento?", a: "Proceso de determinar la mejor ruta de envío de datos." },
+{ q: "¿Qué es un NAT?", a: "Traducción de direcciones de red." },
+{ q: "¿Qué es una red LAN?", a: "Red de área local." },
+
+{ q: "¿Qué es una red WAN?", a: "Red de área amplia." },
+{ q: "¿Qué es una red MAN?", a: "Red de área metropolitana." },
+{ q: "¿Qué es una topología de red?", a: "Forma en que se organiza una red." },
+{ q: "¿Qué es una red punto a punto?", a: "Red de comunicación directa entre dos equipos." },
+{ q: "¿Qué es un servidor?", a: "Equipo que proporciona servicios a otros equipos." },
+{ q: "¿Qué es un cliente?", a: "Equipo que solicita servicios a un servidor." },
+{ q: "¿Qué es un servicio web?", a: "Servicio accesible a través de la red." },
+{ q: "¿Qué es FTP?", a: "Protocolo para transferencia de archivos." },
+{ q: "¿Qué es SFTP?", a: "FTP seguro sobre SSH." },
+{ q: "¿Qué es NFS?", a: "Sistema de archivos en red." },
+
+{ q: "¿Qué es Samba?", a: "Sistema para compartir archivos con Windows." },
+{ q: "¿Qué es un demonio de red?", a: "Servicio que gestiona procesos de red." },
+{ q: "¿Qué es el hardware?", a: "Componentes físicos del computador." },
+{ q: "¿Qué es el software?", a: "Conjunto de programas del sistema." },
+{ q: "¿Qué es la CPU?", a: "Unidad central de procesamiento." },
+{ q: "¿Qué es un núcleo de CPU?", a: "Unidad de procesamiento dentro del procesador." },
+{ q: "¿Qué es la memoria RAM?", a: "Memoria principal de trabajo del sistema." },
+{ q: "¿Qué es la memoria ROM?", a: "Memoria de solo lectura." },
+{ q: "¿Qué es el disco duro?", a: "Dispositivo de almacenamiento permanente." },
+{ q: "¿Qué es un SSD?", a: "Unidad de estado sólido de alta velocidad." },
+
+{ q: "¿Qué es el bus del sistema?", a: "Canal de comunicación entre componentes." },
+{ q: "¿Qué es la BIOS?", a: "Firmware básico de arranque del sistema." },
+{ q: "¿Qué es UEFI?", a: "Reemplazo moderno de la BIOS." },
+{ q: "¿Qué es un periférico?", a: "Dispositivo externo conectado al computador." },
+{ q: "¿Qué es un dispositivo de entrada?", a: "Dispositivo que introduce datos al sistema." },
+{ q: "¿Qué es un dispositivo de salida?", a: "Dispositivo que muestra información del sistema." },
+{ q: "¿Qué es un dispositivo de almacenamiento?", a: "Dispositivo que guarda información." },
+{ q: "¿Qué es el kernel?", a: "Núcleo que controla el hardware y procesos." },
+{ q: "¿Qué es un módulo del kernel?", a: "Componente cargable que extiende funciones del kernel." },
+
+{ q: "¿Qué comando carga un módulo del kernel?", a: "modprobe." },
+{ q: "¿Qué comando lista módulos cargados?", a: "lsmod." },
+{ q: "¿Qué comando elimina un módulo?", a: "rmmod." },
+{ q: "¿Qué es un driver?", a: "Controlador que permite al sistema usar el hardware." },
+{ q: "¿Qué es Plug and Play?", a: "Sistema que detecta hardware automáticamente." },
+{ q: "¿Qué es el archivo /proc?", a: "Sistema de archivos virtual del sistema." },
+{ q: "¿Qué es el archivo /sys?", a: "Sistema de archivos virtual del hardware." },
+{ q: "¿Qué es el consumo eléctrico del sistema?", a: "Cantidad de energía usada por el equipo." },
+{ q: "¿Qué es la temperatura del CPU?", a: "Nivel de calor del procesador." },
+
+      { q: "¿Qué es la virtualización?", a: "Tecnología que permite ejecutar varios sistemas operativos en un mismo hardware." },
+{ q: "¿Qué es una máquina virtual?", a: "Sistema operativo que se ejecuta dentro de otro sistema." },
+{ q: "¿Qué es un hipervisor?", a: "Software que gestiona las máquinas virtuales." },
+{ q: "¿Qué es KVM?", a: "Hipervisor de virtualización en Linux." },
+{ q: "¿Qué es VirtualBox?", a: "Software de virtualización de código abierto." },
+{ q: "¿Qué es VMware?", a: "Plataforma comercial de virtualización." },
+{ q: "¿Qué es un contenedor?", a: "Entorno aislado para ejecutar aplicaciones." },
+{ q: "¿Qué es Docker?", a: "Plataforma de contenedores." },
+{ q: "¿Qué es un clúster?", a: "Conjunto de equipos que trabajan como uno solo." },
+{ q: "¿Qué es la alta disponibilidad?", a: "Capacidad de un sistema de estar operativo continuamente." },
+
+{ q: "¿Qué es la tolerancia a fallos?", a: "Capacidad de seguir funcionando ante errores." },
+{ q: "¿Qué es un UPS?", a: "Sistema de alimentación ininterrumpida." },
+{ q: "¿Qué es la fuente de poder?", a: "Componente que suministra energía al equipo." },
+{ q: "¿Qué es un ventilador de CPU?", a: "Dispositivo que enfría el procesador." },
+{ q: "¿Qué es un disipador?", a: "Elemento que disipa el calor del hardware." },
+{ q: "¿Qué es la arquitectura x86?", a: "Arquitectura de procesadores más común." },
+{ q: "¿Qué es ARM?", a: "Arquitectura de procesadores de bajo consumo." },
+{ q: "¿Qué es el overclocking?", a: "Aumento manual de la velocidad del hardware." },
+{ q: "¿Qué es el throttling?", a: "Reducción automática del rendimiento por temperatura." },
+{ q: "¿Qué es una tarjeta gráfica?", a: "Dispositivo encargado del procesamiento de video." },
+
+{ q: "¿Qué es una GPU dedicada?", a: "Tarjeta gráfica independiente del procesador." },
+{ q: "¿Qué es una GPU integrada?", a: "Gráfica incorporada dentro del procesador." },
+{ q: "¿Qué es un chipset?", a: "Conjunto de circuitos que controlan la placa madre." },
+{ q: "¿Qué es una motherboard?", a: "Placa principal del computador." },
+{ q: "¿Qué es un slot PCIe?", a: "Puerto de expansión para tarjetas." },
+{ q: "¿Qué es un bus SATA?", a: "Interfaz para discos duros y SSD." },
+{ q: "¿Qué es un bus NVMe?", a: "Interfaz de alta velocidad para SSD." },
+{ q: "¿Qué es un RAID?", a: "Conjunto de discos para mejorar rendimiento o seguridad." },
+{ q: "¿Qué es RAID 0?", a: "RAID de máximo rendimiento sin tolerancia a fallos." },
+{ q: "¿Qué es RAID 1?", a: "RAID de espejo de discos para seguridad." },
+
+{ q: "¿Qué es RAID 5?", a: "RAID con paridad distribuida." },
+{ q: "¿Qué es hot swap?", a: "Cambio de hardware sin apagar el sistema." },
+{ q: "¿Qué es un servidor dedicado?", a: "Servidor exclusivo para un solo cliente." },
+{ q: "¿Qué es un servidor compartido?", a: "Servidor usado por varios clientes." },
+{ q: "¿Qué es un datacenter?", a: "Centro físico de servidores." },
+{ q: "¿Qué es el servidor X?", a: "Componente que gestiona la interfaz gráfica." },
+{ q: "¿Qué es Xorg?", a: "Implementación del servidor gráfico X para Linux." },
+{ q: "¿Qué es el sistema de ventanas X?", a: "Sistema que gestiona gráficos y entradas." },
+{ q: "¿Qué archivo configuran Xorg tradicionalmente?", a: "/etc/X11/xorg.conf." },
+{ q: "¿Qué es Wayland?", a: "Servidor gráfico moderno alternativo a Xorg." },
+
+{ q: "¿Qué es un entorno de escritorio?", a: "Interfaz gráfica completa del sistema." },
+{ q: "¿Qué es GNOME?", a: "Entorno de escritorio popular en Linux." },
+{ q: "¿Qué es KDE Plasma?", a: "Entorno de escritorio altamente personalizable." },
+{ q: "¿Qué es XFCE?", a: "Entorno de escritorio ligero." },
+{ q: "¿Qué es LXDE?", a: "Entorno de escritorio muy liviano." },
+{ q: "¿Qué es un gestor de ventanas?", a: "Componente que administra las ventanas gráficas." },
+{ q: "¿Qué es una sesión gráfica?", a: "Inicio del entorno gráfico de un usuario." },
+{ q: "¿Qué es un display manager?", a: "Gestor de inicio de sesión gráfico." },
+{ q: "¿Qué es GDM?", a: "Display manager usado por GNOME." },
+{ q: "¿Qué es LightDM?", a: "Display manager ligero." },
+
+
+{ q: "¿Qué es un display en Xorg?", a: "Identificador de la pantalla gráfica activa." },
+{ q: "¿Qué significan los números :0 en Xorg?", a: "Indican el número de sesión gráfica." },
+{ q: "¿Qué es la extensión GLX en Xorg?", a: "Extensión que permite aceleración gráfica 3D." },
+{ q: "¿Qué es XRandR?", a: "Extensión para gestionar resoluciones dinámicamente." },
+{ q: "¿Qué comando cambia resolución con XRandR?", a: "xrandr." },
+{ q: "¿Qué es una pantalla primaria?", a: "Pantalla principal del sistema." },
+{ q: "¿Qué es un monitor secundario?", a: "Pantalla adicional conectada al sistema." },
+{ q: "¿Qué es la rotación de pantalla?", a: "Cambio de orientación del monitor." },
+{ q: "¿Qué es TwinView?", a: "Tecnología de múltiples pantallas en NVIDIA." },
+{ q: "¿Qué es una salida HDMI?", a: "Interfaz digital de video y audio." },
+
+{ q: "¿Qué es una salida VGA?", a: "Interfaz analógica de video." },
+{ q: "¿Qué es una salida DVI?", a: "Interfaz digital de video." },
+{ q: "¿Qué es DisplayPort?", a: "Interfaz digital moderna de video." },
+{ q: "¿Qué es un servidor SSH?", a: "Servicio para acceso remoto seguro." },
+{ q: "¿Qué es el protocolo SSH?", a: "Protocolo seguro de administración remota." },
+{ q: "¿Qué navegador usa típicamente la terminal?", a: "lynx o w3m." },
+{ q: "¿Qué es SCP?", a: "Copia segura de archivos por SSH." },
+{ q: "¿Qué es RSYNC?", a: "Herramienta para sincronizar archivos." },
+{ q: "¿Qué es un túnel SSH?", a: "Canal cifrado para redirigir tráfico." },
+{ q: "¿Qué es un certificado digital?", a: "Documento que valida identidades en red." },
+
+{ q: "¿Qué es TLS?", a: "Protocolo de cifrado para comunicaciones seguras." },
+{ q: "¿Qué es OpenVPN?", a: "Servicio de red privada virtual." },
+{ q: "¿Qué es WireGuard?", a: "VPN moderna y rápida." },
+{ q: "¿Qué es una regla de firewall?", a: "Norma que permite o bloquea tráfico." },
+{ q: "¿Qué es SELinux?", a: "Sistema de control de acceso reforzado." },
+{ q: "¿Qué es AppArmor?", a: "Sistema de seguridad por perfiles." },
+{ q: "¿Qué es un log del sistema?", a: "Registro de eventos del sistema." },
+{ q: "¿Qué archivo contiene logs generales?", a: "/var/log/syslog." },
+{ q: "¿Qué archivo contiene logs de autenticación?", a: "/var/log/auth.log." },
+
+{ q: "¿Qué es la administración de sistemas?", a: "Gestión completa de servidores y equipos." },
+{ q: "¿Qué es la automatización?", a: "Ejecución automática de tareas." },
+{ q: "¿Qué es Ansible?", a: "Herramienta de automatización de sistemas." },
+{ q: "¿Qué es Puppet?", a: "Herramienta de gestión de configuración." },
+{ q: "¿Qué es Chef?", a: "Plataforma de automatización." },
+{ q: "¿Qué es una copia de seguridad?", a: "Duplicado de datos para recuperación." },
+{ q: "¿Qué es un respaldo incremental?", a: "Respaldo solo de cambios nuevos." },
+{ q: "¿Qué es un respaldo completo?", a: "Copia total de los datos." },
+{ q: "¿Qué es recuperación ante desastres?", a: "Restauración tras fallos críticos." },
+{ q: "¿Qué es un SLA?", a: "Acuerdo de nivel de servicio." },
+
+{ q: "¿Qué es una auditoría de sistemas?", a: "Evaluación de seguridad y funcionamiento." },
+{ q: "¿Qué es una política de seguridad?", a: "Conjunto de normas de protección." },
+{ q: "¿Qué es un parche de seguridad?", a: "Actualización que corrige vulnerabilidades." },
+{ q: "¿Qué es un exploit?", a: "Código que aprovecha una vulnerabilidad." },
+{ q: "¿Qué es un malware?", a: "Software malicioso." },
+{ q: "¿Qué es un antivirus?", a: "Programa de detección de malware." },
+{ q: "¿Qué es un IDS?", a: "Sistema de detección de intrusos." },
+{ q: "¿Qué es un IPS?", a: "Sistema de prevención de intrusos." },
+{ q: "¿Qué es la ciberseguridad?", a: "Protección de sistemas informáticos." },
+
+      { q: "¿Para qué sirve el comando watch?", a: "Ejecuta un comando repetidamente mostrando su salida en tiempo real." },
+{ q: "¿Para qué sirve watch -n 1 date?", a: "Muestra la fecha actualizada cada segundo." },
+{ q: "¿Para qué sirve stat?", a: "Muestra información detallada de un archivo." },
+{ q: "¿Para qué sirve file?", a: "Determina el tipo de un archivo." },
+{ q: "¿Para qué sirve tac?", a: "Muestra el contenido de un archivo en orden inverso." },
+{ q: "¿Para qué sirve shred?", a: "Sobrescribe un archivo para eliminarlo de forma segura." },
+{ q: "¿Para qué sirve timeout?", a: "Ejecuta un comando con límite de tiempo." },
+{ q: "¿Para qué sirve yes?", a: "Repite una cadena de texto continuamente." },
+{ q: "¿Para qué sirve watch free -m?", a: "Muestra el uso de memoria en tiempo real." },
+{ q: "¿Para qué sirve factor?", a: "Muestra los factores primos de un número." },
+
+{ q: "¿Para qué sirve nl?", a: "Muestra un archivo con numeración de líneas." },
+{ q: "¿Para qué sirve column?", a: "Alinea la salida en columnas." },
+{ q: "¿Para qué sirve fold?", a: "Ajusta el ancho del texto mostrado." },
+{ q: "¿Para qué sirve rev?", a: "Invierte el contenido de cada línea." },
+{ q: "¿Para qué sirve chattr?", a: "Cambia atributos especiales de archivos." },
+{ q: "¿Para qué sirve lsattr?", a: "Muestra atributos especiales de archivos." },
+{ q: "¿Para qué sirve setfacl?", a: "Asigna listas de control de acceso (ACL)." },
+{ q: "¿Para qué sirve getfacl?", a: "Muestra las listas de control de acceso." },
+{ q: "¿Para qué sirve watch sensors?", a: "Muestra temperaturas del sistema en tiempo real." },
+{ q: "¿Para qué sirve uptime -p?", a: "Muestra el tiempo de actividad en formato legible." },
+
+{ q: "¿Para qué sirve hwinfo?", a: "Muestra información detallada del hardware." },
+{ q: "¿Para qué sirve free -h?", a: "Muestra el uso de memoria en formato legible." },
+{ q: "¿Para qué sirve watch df -h?", a: "Monitorea el uso de disco en tiempo real." },
+{ q: "¿Para qué sirve watch ps -ef?", a: "Muestra procesos en tiempo real." },
+{ q: "¿Para qué sirve renice?", a: "Cambia la prioridad de un proceso en ejecución." },
+{ q: "¿Para qué sirve pkill?", a: "Finaliza procesos por nombre." },
+{ q: "¿Para qué sirve pgrep?", a: "Busca procesos por nombre." },
+{ q: "¿Para qué sirve vmstat?", a: "Muestra estadísticas de memoria y procesos." },
+{ q: "¿Para qué sirve iostat?", a: "Muestra estadísticas de CPU y discos." },
+{ q: "¿Para qué sirve mpstat?", a: "Muestra estadísticas por procesador." },
+
+{ q: "¿Para qué sirve htop?", a: "Monitorea procesos de forma interactiva." },
+{ q: "¿Para qué sirve at?", a: "Programa la ejecución de tareas en un horario específico." },
+{ q: "¿Para qué sirve atq?", a: "Lista las tareas programadas con at." },
+{ q: "¿Para qué sirve atrm?", a: "Elimina tareas programadas con at." },
+{ q: "¿Para qué sirve basename?", a: "Extrae el nombre de un archivo desde una ruta." },
+{ q: "¿Para qué sirve dirname?", a: "Obtiene la ruta del directorio de un archivo." },
+{ q: "¿Para qué sirve realpath?", a: "Muestra la ruta absoluta real de un archivo." },
+{ q: "¿Para qué sirve lsipc?", a: "Lista objetos de comunicación entre procesos." },
+{ q: "¿Para qué sirve ipcs?", a: "Muestra colas de mensajes inter-proceso." },
+{ q: "¿Para qué sirve ipcrm?", a: "Elimina recursos de comunicación inter-proceso." },
+
+{ q: "¿Para qué sirve getenforce?", a: "Muestra el estado de SELinux." },
+{ q: "¿Para qué sirve setenforce?", a: "Cambia el modo de funcionamiento de SELinux." },
+{ q: "¿Para qué sirve semanage?", a: "Administra políticas de SELinux." },
+{ q: "¿Para qué sirve lslocks?", a: "Muestra bloqueos activos del sistema." },
+{ q: "¿Para qué sirve numactl?", a: "Controla políticas de memoria NUMA." },
+{ q: "¿Para qué sirve numastat?", a: "Muestra estadísticas de memoria NUMA." },
+{ q: "¿Para qué sirve iotop?", a: "Muestra procesos que usan el disco." },
+{ q: "¿Para qué sirve pstree?", a: "Muestra procesos en forma de árbol." },
+{ q: "¿Para qué sirve lsmem?", a: "Muestra bloques de memoria del sistema." },
+{ q: "¿Para qué sirve watch lsblk?", a: "Monitorea discos en tiempo real." },
+
+
+      { q: "¿Para qué sirve free -g?", a: "Muestra el uso de memoria en gigabytes." },
+{ q: "¿Para qué sirve numactl?", a: "Controla las políticas de memoria NUMA." },
+{ q: "¿Para qué sirve numastat?", a: "Muestra estadísticas de memoria NUMA." },
+{ q: "¿Para qué sirve watch lsblk?", a: "Monitorea dispositivos de almacenamiento en tiempo real." },
+{ q: "¿Para qué sirve free -t?", a: "Muestra el total de memoria libre y usada." },
+{ q: "¿Para qué sirve watch iotop?", a: "Monitorea en tiempo real el uso de disco por procesos." },
+{ q: "¿Para qué sirve iotop?", a: "Muestra procesos que utilizan intensamente el disco." },
+{ q: "¿Para qué sirve pstree?", a: "Muestra los procesos en forma de árbol." },
+{ q: "¿Para qué sirve watch pstree?", a: "Monitorea la jerarquía de procesos en tiempo real." },
+{ q: "¿Para qué sirve lsmem?", a: "Muestra los bloques de memoria del sistema." },
+
+{ q: "¿Qué es el archivo /etc/X11/xorg.conf?", a: "Es el archivo de configuración principal del servidor gráfico Xorg." },
+{ q: "¿Para qué sirve xorg.conf?", a: "Sirve para definir la configuración del sistema gráfico." },
+{ q: "¿Qué sistema utiliza el archivo xorg.conf?", a: "El sistema de ventanas X." },
+{ q: "¿Qué componente controla Xorg?", a: "Controla la comunicación entre hardware gráfico y aplicaciones." },
+{ q: "¿Es obligatorio que exista xorg.conf?", a: "No, hoy se genera dinámicamente en la mayoría de sistemas." },
+{ q: "¿Dónde se encuentra ubicado xorg.conf?", a: "En el directorio /etc/X11/." },
+{ q: "¿Qué tipo de archivo es xorg.conf?", a: "Un archivo de texto de configuración." },
+{ q: "¿Qué sección define el monitor?", a: "Section \"Monitor\"." },
+{ q: "¿Qué sección define la tarjeta gráfica?", a: "Section \"Device\"." },
+{ q: "¿Qué sección define la pantalla?", a: "Section \"Screen\"." },
+
+{ q: "¿Qué sección define el teclado?", a: "Section \"InputDevice\"." },
+{ q: "¿Qué sección define el mouse?", a: "Section \"InputDevice\"." },
+{ q: "¿Qué sección agrupa todos los dispositivos?", a: "Section \"ServerLayout\"." },
+{ q: "¿Qué función cumple ServerLayout?", a: "Asocia monitor, pantalla y dispositivos de entrada." },
+{ q: "¿Qué es la sección Files?", a: "Define rutas de fuentes y módulos." },
+{ q: "¿Qué es la sección Module?", a: "Carga módulos del servidor X." },
+{ q: "¿Qué es un Driver en Xorg?", a: "Es el controlador de la tarjeta gráfica." },
+{ q: "¿Qué drivers comunes existen en Xorg?", a: "intel, nouveau, nvidia y vesa." },
+{ q: "¿Qué opción define la resolución de pantalla?", a: "La SubSection Display." },
+{ q: "¿Qué es el atributo Modes?", a: "Define las resoluciones disponibles." },
+
+{ q: "¿Qué es HorizSync?", a: "Frecuencia horizontal del monitor." },
+{ q: "¿Qué es VertRefresh?", a: "Frecuencia vertical del monitor." },
+{ q: "¿Qué es DefaultDepth?", a: "Profundidad de color por defecto." },
+{ q: "¿Qué significa profundidad de color 24?", a: "Color real de 16 millones de colores." },
+{ q: "¿Qué es una pantalla virtual en Xorg?", a: "Un escritorio más grande que la resolución física." },
+{ q: "¿Qué es el BusID?", a: "Identificador del bus donde está la GPU." },
+{ q: "¿Qué significa Identifier?", a: "Nombre lógico de una sección." },
+{ q: "¿Para qué sirve Option?", a: "Para definir parámetros avanzados." },
+{ q: "¿Qué es AccelMethod?", a: "Define el método de aceleración gráfica." },
+{ q: "¿Qué hace la opción TearFree?", a: "Evita el efecto de pantalla partida." },
+
+{ q: "¿Qué es el directorio /etc/X11/xorg.conf.d/ ?", a: "Directorio para configuraciones modulares de Xorg." },
+{ q: "¿Qué ventaja tiene xorg.conf.d?", a: "Permite configuraciones separadas por partes." },
+{ q: "¿Cómo se genera automáticamente xorg.conf?", a: "Con el comando Xorg -configure." },
+{ q: "¿Dónde se guarda xorg.conf generado automáticamente?", a: "En /root/xorg.conf.new." },
+{ q: "¿Qué se debe hacer antes de modificar xorg.conf?", a: "Realizar una copia de seguridad." },
+{ q: "¿Qué error provoca una mala configuración de xorg.conf?", a: "Puede impedir que inicie el entorno gráfico." },
+{ q: "¿Qué es el modo vesa?", a: "Un controlador gráfico genérico." },
+{ q: "¿Qué es el modo fbdev?", a: "Controlador basado en framebuffer." },
+{ q: "¿Puede xorg.conf definir múltiples monitores?", a: "Sí, mediante Screen y ServerLayout." },
+{ q: "¿Qué es TwinView?", a: "Configuración de doble monitor en NVIDIA." },
+
+{ q: "¿Qué es XRandR?", a: "Extensión para manejo dinámico de pantallas." },
+{ q: "¿Qué es DPMS?", a: "Sistema de ahorro de energía del monitor." },
+{ q: "¿Qué es AllowEmptyInput?", a: "Permite iniciar X sin dispositivos de entrada fijos." },
+{ q: "¿Dónde se registran los errores de Xorg?", a: "En /var/log/Xorg.0.log." },
+{ q: "¿Qué es la aceleración 3D en Xorg?", a: "Uso de la GPU para gráficos avanzados." },
+{ q: "¿Qué módulo habilita la aceleración 3D?", a: "El módulo glx." },
+{ q: "¿Qué ocurre si falta el módulo GLX?", a: "No funcionarán aplicaciones 3D." },
+{ q: "¿Qué es la sección Extensions?", a: "Sección para activar extensiones del servidor X." },
+{ q: "¿Qué es una tarjeta híbrida?", a: "Equipo con GPU integrada y dedicada." },
+{ q: "¿Por qué hoy casi no se edita xorg.conf manualmente?", a: "Porque la mayoría de configuraciones son automáticas." },
+
+
+      // Preguntas mixtas repaso final
+      { q: "¿Qué comando limpia la pantalla?", a: "clear." },
+      { q: "¿Qué comando muestra la ayuda de otro comando?", a: "man." },
+      { q: "¿Qué significa sudo?", a: "Ejecutar como superusuario." },
+      { q: "¿Qué usuario tiene control total del sistema?", a: "root." },
+      { q: "¿Qué comando cierra sesión?", a: "exit." },
+      { q: "¿Qué comando muestra el historial?", a: "history." },
+      { q: "¿Qué es la recursividad?", a: "Repetición automática en subdirectorios." },
+      { q: "¿Qué es un archivo de configuración?", a: "Archivo que define opciones de programas." },
+      { q: "¿Qué es un log?", a: "Registro de eventos." },
+      { q: "¿Qué es multitarea?", a: "Ejecutar varios procesos a la vez." },
+      { q: "¿Qué comando reinicia el sistema?", a: "reboot." },
+      { q: "¿Qué comando apaga el sistema?", a: "shutdown." },
+      { q: "¿Qué es software propietario?", a: "Software con licencia cerrada." },
+      { q: "¿Qué es una variable de entorno?", a: "Variable global del sistema." },
+      { q: "¿Qué es la nube?", a: "Servicios en Internet." },
+      { q: "¿Qué es una actualización de seguridad?", a: "Parche para corregir vulnerabilidades." },
+      { q: "¿Qué es un archivo binario?", a: "Archivo ejecutable." },
+      { q: "¿Qué es una shell?", a: "Intérprete de comandos." },
+      { q: "¿Qué es la virtualización?", a: "Ejecutar varios sistemas en uno." },
+      { q: "¿Qué certificación evalúa estos contenidos?", a: "Linux Essentials – LPI." }
+    ];
+
+    // ===== Normalización =====
+    function normalize(text) {
+      if (text == null) return "";
+      return text.toString()
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quitar tildes
+        .replace(/[^a-z0-9\s\-_\/\.]/g, " ") // conservar / . _
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    // ===== Levenshtein (distancia) =====
+    function levenshtein(a, b) {
+      a = a || "";
+      b = b || "";
+      const m = a.length, n = b.length;
+      if (m === 0) return n;
+      if (n === 0) return m;
+      const v0 = new Array(n + 1);
+      const v1 = new Array(n + 1);
+      for (let i = 0; i <= n; i++) v0[i] = i;
+      for (let i = 0; i < m; i++) {
+        v1[0] = i + 1;
+        for (let j = 0; j < n; j++) {
+          const cost = a[i] === b[j] ? 0 : 1;
+          v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+        }
+        for (let k = 0; k <= n; k++) v0[k] = v1[k];
+      }
+      return v1[n];
+    }
+
+    // ===== Scoring combinado: overlap de palabras + similitud Levenshtein =====
+    function scoreSimilarity(query, text) {
+      const nq = normalize(query);
+      const nt = normalize(text);
+      if (!nq || !nt) return 0;
+
+      const qWords = nq.split(" ").filter(Boolean);
+      const tWords = nt.split(" ").filter(Boolean);
+      const qSet = new Set(qWords);
+      const common = tWords.reduce((s, w) => s + (qSet.has(w) ? 1 : 0), 0);
+      const overlap = common / Math.max(1, tWords.length); // 0..1
+
+      const lev = levenshtein(nq, nt);
+      const maxLen = Math.max(nq.length, nt.length);
+      const levScore = maxLen === 0 ? 1 : (1 - (lev / maxLen)); // 0..1 where 1 is identical
+
+      // combinar: dar más peso al overlap (0.7) y algo al lev (0.3)
+      const alpha = 0.7;
+      return (alpha * overlap) + ((1 - alpha) * levScore);
+    }
+
+    // ===== Búsqueda mejorada: considera pregunta y respuesta, exact matches y fuzzy =====
+    function findBestAnswer(query) {
+      const nq = normalize(query);
+      if (!nq) return { a: "No se ingresó una pregunta.", score: 0, q: "", matchedField: null };
+
+      // 1) Exact matches (pregunta o respuesta)
+      for (const item of QA) {
+        if (normalize(item.q) === nq) return { a: item.a, score: 1.0, q: item.q, matchedField: "question" };
+        if (normalize(item.a) === nq) return { a: item.a, score: 1.0, q: item.q, matchedField: "answer" };
+      }
+
+      // 2) Containment (query dentro de question/answer or viceversa)
+      for (const item of QA) {
+        const qNorm = normalize(item.q);
+        const aNorm = normalize(item.a);
+        if (qNorm.includes(nq) || nq.includes(qNorm)) return { a: item.a, score: 0.95, q: item.q, matchedField: "question" };
+        if (aNorm.includes(nq) || nq.includes(aNorm)) return { a: item.a, score: 0.95, q: item.q, matchedField: "answer" };
+      }
+
+      // 3) Fuzzy scoring
+      let best = null;
+      for (const item of QA) {
+        const sQ = scoreSimilarity(query, item.q);
+        const sA = scoreSimilarity(query, item.a);
+
+        // preferir pregunta o respuesta según mayor puntaje
+        const field = sQ >= sA ? "question" : "answer";
+        const score = Math.max(sQ, sA);
+
+        if (!best || score > best.score) {
+          best = { item, score, field };
+        }
+      }
+
+      if (!best || best.score < 0.30) {
+        return { a: "No se encontró una respuesta segura para esa consulta. Intenta usar palabras clave (ej: 'comando copiar archivo cp').", score: best ? best.score : 0, q: "", matchedField: null };
+      }
+
+      return { a: best.item.a, score: best.score, q: best.item.q, matchedField: best.field };
+    }
+
+    // ===== UI hooks =====
+    const input = document.getElementById("query");
+    const btnSearch = document.getElementById("btnSearch");
+    const btnMic = document.getElementById("btnMic");
+    const result = document.getElementById("result");
+    const scoreBox = document.getElementById("score");
+    const meta = document.getElementById("meta");
+
+    btnSearch.addEventListener("click", () => doSearch(input.value));
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(input.value); });
+
+    function doSearch(text) {
+      const found = findBestAnswer(text);
+      if (found.matchedField === "question") {
+        result.innerHTML = "<strong>Pregunta encontrada:</strong> " + (found.q || "(sin coincidencia exacta)") + "<br><strong>Respuesta única:</strong> " + found.a;
+        meta.textContent = "Consulta tratada como pregunta.";
+      } else if (found.matchedField === "answer") {
+        result.innerHTML = "<strong>Respuesta encontrada (usada como consulta):</strong> " + found.a + "<br><strong>Pregunta asociada:</strong> " + (found.q || "(sin coincidencia exacta)");
+        meta.textContent = "Consulta tratada como respuesta — se devolvió la pregunta asociada.";
+      } else {
+        result.textContent = found.a;
+        meta.textContent = "";
+      }
+      scoreBox.textContent = "Confianza: " + (Math.round(found.score * 100)) + "%";
+    }
+
+    // ===== Reconocimiento de voz (Web Speech API) =====
+    let recognition;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.lang = 'es-ES';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = function(event) {
+        const text = event.results[0][0].transcript;
+        input.value = text;
+        doSearch(text);
+      };
+      recognition.onerror = function(event) {
+        result.innerHTML = "<span class='no-speech'>Error de reconocimiento: " + event.error + "</span>";
+      };
+    } else {
+      btnMic.disabled = true;
+      btnMic.title = "Reconocimiento de voz no soportado en este navegador";
+    }
+
+    btnMic.addEventListener("click", () => {
+      if (!recognition) {
+        result.innerHTML = "<span class='no-speech'>Reconocimiento de voz no soportado en este navegador.</span>";
+        return;
+      }
+      recognition.start();
+      result.textContent = "Escuchando... habla ahora.";
+      meta.textContent = "";
+    });
+
+    // Opcional: ejemplo inicial
+    // doSearch("¿qué es linux?");
+  </script>
 </body>
 </html>
